@@ -1,0 +1,437 @@
+:root {
+  /*
+    ============================
+    初心者向け: CSSの基本
+    ============================
+    - :root は「全体で使う変数」を置く場所です。
+    - --xxx の形で定義した値は var(--xxx) で再利用できます。
+    - 色や余白を変数化すると、あとで全体調整が楽になります。
+  */
+  /* 色や余白など、後で一括調整しやすい共通変数 */
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --line: #dadde3;
+  --text: #111111;
+  --sub: #576074;
+  --accent: #0b63f6;
+  --danger: #b00020;
+  --safe-top: env(safe-area-inset-top, 0rem);
+  --safe-right: env(safe-area-inset-right, 0rem);
+  --safe-bottom: env(safe-area-inset-bottom, 0rem);
+  --safe-left: env(safe-area-inset-left, 0rem);
+}
+
+* {
+  /*
+    box-sizing: border-box;
+    幅計算の基礎:
+    - content-box(初期値): widthにpadding/borderが足される
+    - border-box: widthの中にpadding/borderを含める
+    画面崩れが起きにくいので、実務でよく使う設定です。
+  */
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #f4f7ff 0%, #eff2f8 40%, #f8fafc 100%);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app-shell {
+  /* 375px(23.4375rem)基準で中央配置し、safe-area分も余白確保 */
+  width: 100%;
+  max-width: 23.4375rem;
+  margin: 0 auto;
+  padding: calc(0.75rem + var(--safe-top)) calc(0.75rem + var(--safe-right)) calc(6.5rem + var(--safe-bottom)) calc(0.75rem + var(--safe-left));
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.app-header p {
+  margin: 0.25rem 0 0;
+  color: var(--sub);
+  font-size: 0.875rem;
+}
+
+.content {
+  /*
+    Flexboxの基礎:
+    display:flex + flex-direction:column で、子要素を縦に並べる。
+    gap で子要素どうしの間隔をまとめて指定できる。
+  */
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.card {
+  background: var(--card);
+  border: 0.0625rem solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.calendar-head {
+  /*
+    Gridの基礎:
+    grid-template-columns: 3rem 1fr 3rem;
+    - 左ボタン: 3rem固定
+    - 中央: 残り全部(1fr)
+    - 右ボタン: 3rem固定
+  */
+  display: grid;
+  grid-template-columns: 3rem 1fr 3rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-btn,
+.month-label,
+.primary-btn,
+.save-fixed-btn {
+  /* 48px以上を満たす3rem(=48px)でタップしやすく */
+  min-height: 3rem;
+  border-radius: 0.625rem;
+  border: 0.0625rem solid var(--line);
+  background: #ffffff;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.icon-btn {
+  width: 100%;
+}
+
+.month-label {
+  width: 100%;
+  border-color: #ced6ea;
+  font-weight: 700;
+}
+
+.calendar-swipe-area {
+  /*
+    touch-action: pan-y;
+    - 縦スクロールはブラウザ標準動作を許可
+    - 横方向はJSでスワイプ判定しやすくする
+  */
+  margin-top: 0.5rem;
+  touch-action: pan-y;
+}
+
+.week-header,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.calendar-grid.slide-next {
+  /* 次月へ移動する時の軽いスライド演出 */
+  animation: calendar-slide-next 180ms ease-out;
+}
+
+.calendar-grid.slide-prev {
+  /* 前月へ移動する時の軽いスライド演出 */
+  animation: calendar-slide-prev 180ms ease-out;
+}
+
+.week-header {
+  margin-bottom: 0.25rem;
+}
+
+.week-cell {
+  text-align: center;
+  color: var(--sub);
+  font-size: 0.75rem;
+}
+
+.day-cell {
+  /*
+    日付セル内の並び:
+    - 上: 日付数字
+    - 下: 金額ボタン
+    flex-direction:column + justify-content:space-between で
+    上下に自然配置する。
+  */
+  min-height: 4.25rem;
+  border: 0.0625rem solid #d9deea;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  background: #fff;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.day-cell.empty {
+  background: #f8f9fb;
+  border-style: dashed;
+}
+
+.day-cell.selected {
+  outline: 0.125rem solid #83a8ff;
+}
+
+.day-number {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #000;
+}
+
+.amount-btn {
+  /* 金額が長くてもはみ出さないよう折返し */
+  width: 100%;
+  border: none;
+  background: #eef4ff;
+  color: #000;
+  border-radius: 0.375rem;
+  padding: 0.125rem;
+  font-size: 0.625rem;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.form-card h2,
+.totals-card h2,
+.table-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.selected-date-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.input-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.625rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+input,
+select {
+  /*
+    iOS Safari対策:
+    font-sizeが16px未満だと入力フォーカス時に自動拡大される。
+    そのため1rem(=16px)以上を指定してズームを防止する。
+  */
+  width: 100%;
+  min-height: 3rem;
+  border: 0.0625rem solid #cad0de;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.feature-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.toggle-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggle-item input {
+  width: 1.25rem;
+  min-height: 1.25rem;
+}
+
+.primary-btn {
+  width: 100%;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.error-text {
+  color: var(--danger);
+  min-height: 1.2rem;
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+}
+
+.deduction-label {
+  margin-bottom: 0.75rem;
+}
+
+.summary-grid {
+  /* 月合計カードを2列で見やすく並べる */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.summary-item {
+  border: 0.0625rem solid #dde2ed;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.summary-item strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.table-scroll {
+  /*
+    overflow-x:auto:
+    テーブル幅が画面幅を超えたときに横スクロールを出す。
+    -webkit-overflow-scrolling: touch はiOSで慣性スクロールを有効化。
+  */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  /* 列が多いので最小幅を確保し、必要時は横スクロール */
+  min-width: 52rem;
+}
+
+th,
+td {
+  border: 0.0625rem solid #d7ddea;
+  text-align: center;
+  padding: 0.375rem;
+  font-size: 0.75rem;
+  color: #000;
+  white-space: nowrap;
+}
+
+.delete-btn {
+  min-height: 2.5rem;
+  min-width: 3rem;
+  border: 0.0625rem solid #e2a6ac;
+  border-radius: 0.375rem;
+  background: #fff2f4;
+  color: #8a1625;
+}
+
+.modal {
+  /*
+    モーダルの基本:
+    - position:fixed + inset:0 で画面全体を覆う
+    - display:none で普段は非表示
+    - .show クラスが付いた時だけ表示
+  */
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 20;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-panel {
+  width: 100%;
+  max-width: 21rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.picker-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.memo-body {
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #000;
+}
+
+.save-fixed-btn {
+  /*
+    下部固定ボタン:
+    - left:50% + translateX(-50%) で中央寄せ
+    - bottomにsafe-areaを加算してホームバー重なりを回避
+  */
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(0.75rem + var(--safe-bottom));
+  width: calc(100% - 1.5rem - var(--safe-left) - var(--safe-right));
+  max-width: 21.9375rem;
+  background: #122f73;
+  border-color: #122f73;
+  color: #fff;
+  font-weight: 700;
+  z-index: 30;
+}
+
+@keyframes calendar-slide-next {
+  /* 右から左へ切り替わる印象を作る */
+  from {
+    opacity: 0.7;
+    transform: translateX(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0rem);
+  }
+}
+
+@keyframes calendar-slide-prev {
+  /* 左から右へ切り替わる印象を作る */
+  from {
+    opacity: 0.7;
+    transform: translateX(-1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0rem);
+  }
+}
