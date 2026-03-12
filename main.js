@@ -31,7 +31,7 @@ const STORAGE_KEY = "delivery-wage-app-v1";
  * 例:
  * { date: '2026-03-12', count: 80, count170: 2, pickupCount: 1, otherIncome: 0, mode: 'feature1' }
  *
- * currentMode : 設定画面で選ぶ「新規記録のモード」（'feature1'|'feature2'|null）
+ * currentMode : 設定画面で選ぶ「新規記録のモード」（'feature1'|'feature2'|'feature3'|null）
  *               既存レコードの mode は変更しない（過去記録は固定）
  */
 let state = {
@@ -68,6 +68,7 @@ function calcRecordTaxEx(rec) {
   let base = 0;
   if (rec.mode === 'feature1') base = calcFeature1(rec.count);
   else if (rec.mode === 'feature2') base = rec.count * 150;
+  else if (rec.mode === 'feature3') base = rec.count * 160;
 
   // 夜間配達(170円)・集荷(90円)・その他収入は税抜に加算
   return base + rec.count170 * 170 + rec.pickupCount * 90 + rec.otherIncome;
@@ -79,6 +80,7 @@ function calcRecordTaxIn(rec) {
   let base = 0;
   if (rec.mode === 'feature1') base = addTax(calcFeature1(rec.count));
   else if (rec.mode === 'feature2') base = rec.count * 165;
+  else if (rec.mode === 'feature3') base = rec.count * 176;
 
   // 夜間配達は税込187円、集荷とその他は税込同額で加算
   return base + rec.count170 * 187 + rec.pickupCount * 90 + rec.otherIncome;
@@ -99,7 +101,7 @@ function calcMonthlyTotals(year, month) {
   // 月内レコードを集めて合計値を作る
   const recs = getMonthRecords(year, month);
   let totalCount = 0, total170 = 0, totalPickup = 0, totalOther = 0;
-  let totalF1 = 0, totalF2Ex = 0, totalF2In = 0;
+  let totalF1 = 0, totalF2Ex = 0, totalF2In = 0, totalF3Ex = 0, totalF3In = 0;
   let totalEx = 0, totalIn = 0;
 
   recs.forEach(r => {
@@ -111,6 +113,7 @@ function calcMonthlyTotals(year, month) {
     // モード別合計
     if (r.mode === 'feature1') { const f = calcFeature1(r.count); totalF1 += f; }
     else if (r.mode === 'feature2') { totalF2Ex += r.count * 150; totalF2In += r.count * 165; }
+    else if (r.mode === 'feature3') { totalF3Ex += r.count * 160; totalF3In += r.count * 176; }
     // 税抜/税込合計
     totalEx += calcRecordTaxEx(r);
     totalIn += calcRecordTaxIn(r);
@@ -120,7 +123,7 @@ function calcMonthlyTotals(year, month) {
   const deduction = state.monthlyDeductions[toMonthKey(year, month)] || 0;
   return {
     totalCount, total170, totalPickup, totalOther,
-    totalF1, totalF2Ex, totalF2In,
+    totalF1, totalF2Ex, totalF2In, totalF3Ex, totalF3In,
     totalEx, totalIn,
     deduction,
     finalEx: totalEx - deduction,
@@ -270,16 +273,19 @@ function renderModeRadio() {
   // ラジオボタンは state.currentMode を見てON/OFFを決める
   const r1 = document.getElementById('modeFeature1');
   const r2 = document.getElementById('modeFeature2');
+  const r3 = document.getElementById('modeFeature3');
   if (r1) r1.checked = state.currentMode === 'feature1';
   if (r2) r2.checked = state.currentMode === 'feature2';
+  if (r3) r3.checked = state.currentMode === 'feature3';
   updateCurrentModeDisplay();
 }
 
 function updateCurrentModeDisplay() {
   const el = document.getElementById('currentModeDisplay');
   if (!el) return;
-  if (state.currentMode === 'feature1') el.textContent = '機能1';
-  else if (state.currentMode === 'feature2') el.textContent = '機能2';
+  if (state.currentMode === 'feature1') el.textContent = '日給保証';
+  else if (state.currentMode === 'feature2') el.textContent = '単価150';
+  else if (state.currentMode === 'feature3') el.textContent = '単価160';
   else el.textContent = '未設定';
 }
 
@@ -355,8 +361,9 @@ function renderMonthlyTotals() {
     row('集荷枠',             `${t.totalPickup} 件`) +
     row('その他収入',         yen(t.totalOther)) +
     `<div class="total-divider"></div>` +
-    row('機能1 合計',         yen(t.totalF1)) +
-    row('機能2 合計',         `${yen(t.totalF2Ex)} / (${yen(t.totalF2In)})`) +
+    row('日給保証 合計',       yen(t.totalF1)) +
+    row('単価150 合計',        `${yen(t.totalF2Ex)} / (${yen(t.totalF2In)})`) +
+    row('単価160 合計',        `${yen(t.totalF3Ex)} / (${yen(t.totalF3In)})`) +
     `<div class="total-divider"></div>` +
     row('小計（税抜 / 税込）',`${yen(t.totalEx)} / (${yen(t.totalIn)})`) +
     row('固定控除',           `－${yen(t.deduction)}`) +
@@ -397,6 +404,7 @@ function renderTable() {
     const inc = calcRecordTaxIn(rec);
     const f1  = rec.mode === 'feature1' ? yen(calcFeature1(rec.count)) : '—';
     const f2  = rec.mode === 'feature2' ? yen(rec.count * 150)         : '—';
+    const f3  = rec.mode === 'feature3' ? yen(rec.count * 160)         : '—';
 
     const tr = document.createElement('tr');
 
@@ -407,7 +415,7 @@ function renderTable() {
       rec.count170,
       rec.pickupCount,
       yen(rec.otherIncome),
-      f1, f2,
+      f1, f2, f3,
       yen(ex),
       yen(inc),
     ];
@@ -528,7 +536,7 @@ function showMemoModal(rec) {
     memoRow('夜間配達枠', `${rec.count170} 件`) +
     memoRow('集荷枠',       `${rec.pickupCount} 件`) +
     memoRow('その他収入',   yen(rec.otherIncome)) +
-    memoRow('計算モード',   rec.mode === 'feature1' ? '機能1' : '機能2') +
+    memoRow('計算モード',   rec.mode === 'feature1' ? '日給保証' : rec.mode === 'feature2' ? '単価150' : '単価160') +
     memoRow('合計（税抜）', yen(ex),  'total') +
     memoRow('合計（税込）', yen(inc), 'total');
 
@@ -731,7 +739,7 @@ function saveRecord() {
   const mode = getSelectedMode();
   if (!mode) {
     // モード未選択は保存できない
-    showMessage('計算モード（機能1 または 機能2）を選択してください', 'error', 'formMessage');
+    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
     return;
   }
 
@@ -767,7 +775,7 @@ function openSaveConfirm() {
   }
   const mode = getSelectedMode();
   if (!mode) {
-    showMessage('計算モード（機能1 または 機能2）を選択してください', 'error', 'formMessage');
+    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
     return;
   }
 
@@ -794,7 +802,7 @@ function openSaveConfirm() {
     row('夜間配達枠', `${preview.count170} 件`) +
     row('集荷枠', `${preview.pickupCount} 件`) +
     row('その他収入', yen(preview.otherIncome)) +
-    row('計算モード', mode === 'feature1' ? '機能1' : '機能2') +
+    row('計算モード', mode === 'feature1' ? '日給保証' : mode === 'feature2' ? '単価150' : '単価160') +
     row('合計（税抜）', yen(ex)) +
     row('合計（税込）', yen(inc));
 
@@ -858,7 +866,7 @@ function exportCSV() {
     r.count170,
     r.pickupCount,
     r.otherIncome,
-    r.mode === 'feature1' ? '機能1' : '機能2',
+    r.mode === 'feature1' ? '日給保証' : r.mode === 'feature2' ? '単価150' : '単価160',
     calcRecordTaxEx(r),
     calcRecordTaxIn(r),
   ]);
@@ -1011,8 +1019,10 @@ function getSelectedMode() {
   // ラジオの状態から現在のモードを返す
   const r1 = document.getElementById('modeFeature1');
   const r2 = document.getElementById('modeFeature2');
+  const r3 = document.getElementById('modeFeature3');
   if (r1 && r1.checked) return 'feature1';
   if (r2 && r2.checked) return 'feature2';
+  if (r3 && r3.checked) return 'feature3';
   return null;
 }
 
