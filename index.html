@@ -1,31 +1,55 @@
 <!DOCTYPE html>
+<!--
+  初心者向けメモ:
+  HTMLは「画面の骨組み」を作るファイルです。
+  ここでは、どんな部品がどの順番で並ぶかを決めています。
+  見た目は style.css、動きは main.js に分離しています。
+-->
 <html lang="ja">
 <head>
+  <!-- 文字コードをUTF-8に固定（日本語が文字化けしないように） -->
   <meta charset="UTF-8">
+  <!--
+    モバイル画面に合わせる基本設定:
+    width=device-width  = 端末の画面幅に合わせる
+    initial-scale=1     = 初期ズームを等倍
+    viewport-fit=cover  = iPhoneのノッチ領域も使う
+  -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- iOSで「ホーム画面に追加」した時にアプリ風の見た目にする -->
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- iOSのステータスバー色を半透明にする -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- 電話番号の自動リンク化を無効化（誤タップ防止） -->
   <meta name="format-detection" content="telephone=no">
   <title>配達記録</title>
+  <!-- CSSファイルを読み込む -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+<!--
+  アプリ全体のラッパー要素。
+  CSS側で最大幅や余白（safe-area）をここに指定する。
+-->
 <div id="app">
 
-  <!-- ヘッダー -->
+  <!-- ヘッダー（アプリ名を表示） -->
   <header class="header">
     <h1 class="app-title">配達記録</h1>
   </header>
 
-  <!-- ① カレンダー -->
+  <!-- ① カレンダー（表示月の切り替え・日付選択） -->
   <section class="section card" id="calendarSection">
+    <!-- スワイプ検知用のラッパー -->
     <div class="calendar-swipe-wrapper" id="calendarSwipe">
+      <!-- 前月/翌月ナビゲーション -->
       <div class="calendar-nav">
         <button class="nav-btn" id="prevMonth" aria-label="前月">&#8249;</button>
         <button class="month-title" id="monthTitle" aria-label="年月を選択">2025年1月</button>
         <button class="nav-btn" id="nextMonth" aria-label="翌月">&#8250;</button>
       </div>
+      <!-- 曜日ヘッダー -->
       <div class="calendar-dow">
         <span class="dow-cell dow-sun">日</span>
         <span class="dow-cell">月</span>
@@ -35,7 +59,7 @@
         <span class="dow-cell">金</span>
         <span class="dow-cell dow-sat">土</span>
       </div>
-      <!-- JSで動的生成 -->
+      <!-- 日付セルはJSで動的生成 -->
       <div id="calendarGrid"></div>
     </div>
   </section>
@@ -44,18 +68,22 @@
   <section class="section card" id="formSection">
     <h2 class="section-title">記録入力</h2>
 
-    <!-- 選択日 -->
+    <!-- 選択日（カレンダーで選んだ日を表示するだけ） -->
     <div class="form-group">
       <label class="form-label" for="selectedDateDisplay">選択日</label>
       <input type="text" id="selectedDateDisplay" class="form-input"
              readonly placeholder="カレンダーから日付を選択">
     </div>
 
-    <!-- ① 改善: 計算モードをフォーム内でラジオ選択（日ごとに独立） -->
+    <!-- 計算モード（機能1/機能2。どちらか1つを選ぶ） -->
     <div class="form-group">
       <label class="form-label">
         計算モード <span class="required-badge">必須</span>
       </label>
+      <!--
+        name="mode" を同じにすることでラジオが排他になる。
+        value で保存値（feature1/feature2）を持つ。
+      -->
       <div class="mode-radio-group">
         <label class="mode-radio-label" id="modeLabel1">
           <input type="radio" name="mode" id="modeFeature1" value="feature1">
@@ -74,10 +102,12 @@
       </div>
     </div>
 
-    <!-- ⑨ 改善: ±ステッパー付き数値入力 -->
+    <!-- 数値入力（±ボタン付きステッパー） -->
     <div class="form-group">
       <label class="form-label" for="inputCount">配達完了数（件）</label>
       <div class="stepper-wrap">
+        <!-- data-target は「どの入力欄を動かすか」を表す -->
+        <!-- data-delta は「どれだけ増減させるか」を表す -->
         <button class="stepper-btn" data-target="inputCount" data-delta="-1" aria-label="1減らす">−</button>
         <input type="number" id="inputCount" class="form-input stepper-input"
                min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
@@ -115,16 +145,17 @@
       </div>
     </div>
 
-    <!-- ② 改善: リアルタイム金額プレビュー -->
+    <!-- リアルタイム金額プレビュー（入力中に合計を即計算） -->
     <div id="calcPreview" class="calc-preview" aria-live="polite"></div>
 
-    <!-- ⑤ 改善: 前回値クイック入力 -->
+    <!-- 前回値クイック入力（直近の記録をコピー） -->
     <button class="btn-ghost" id="fillPrev" type="button">前回値を使う</button>
 
+    <!-- フォームのエラーメッセージ表示領域 -->
     <p id="formMessage" class="form-message" role="alert" aria-live="polite"></p>
   </section>
 
-  <!-- 月固定控除 -->
+  <!-- 月固定控除（この月の合計から引く額） -->
   <section class="section card">
     <h2 class="section-title">月固定控除</h2>
     <p class="section-note">表示中の月の最終合計から差し引く固定額</p>
@@ -140,16 +171,16 @@
     <button class="btn-secondary btn-full" id="saveDeduction">控除額を保存</button>
   </section>
 
-  <!-- 月合計（④前月比も表示） -->
+  <!-- 月合計（前月比も表示） -->
   <section class="section card">
     <h2 class="section-title">月合計</h2>
-    <!-- renderMonthlyTotals() で動的生成 -->
+    <!-- 月合計の中身はJSで生成する -->
     <div id="monthlyTotals"></div>
-    <!-- ⑧ 改善: CSVエクスポート -->
+    <!-- CSVエクスポート -->
     <button class="btn-secondary btn-full" id="exportCsv" style="margin-top: 1rem;">この月をCSVで出力</button>
   </section>
 
-  <!-- 記録一覧テーブル（⑥2段階削除） -->
+  <!-- 記録一覧テーブル（削除は2段階確認） -->
   <section class="section card">
     <h2 class="section-title">記録一覧</h2>
     <p class="section-note">削除ボタンは2回タップで確定（誤削除防止）</p>
@@ -169,6 +200,7 @@
             <th>削除</th>
           </tr>
         </thead>
+        <!-- 表の中身（行）はJSで追加する -->
         <tbody id="recordsBody"></tbody>
       </table>
     </div>
@@ -176,13 +208,14 @@
 
 </div><!-- /#app -->
 
-<!-- 下部固定ボタン -->
+<!-- 画面下部に固定される保存ボタン -->
 <div class="save-bar">
   <button class="btn-primary" id="saveRecord">この日に記録</button>
 </div>
 
-<!-- 年月ピッカーモーダル -->
+<!-- 年月ピッカーモーダル（年月を直接選ぶ） -->
 <div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true">
+  <!-- 画面の暗い背景（クリックで閉じる） -->
   <div class="modal-overlay" id="pickerOverlay"></div>
   <div class="modal-content">
     <h3 class="modal-title">年月を選択</h3>
@@ -197,7 +230,7 @@
   </div>
 </div>
 
-<!-- 日別詳細モーダル -->
+<!-- 日別詳細モーダル（その日の内訳を見る） -->
 <div id="memoModal" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal-overlay" id="memoOverlay"></div>
   <div class="modal-content">

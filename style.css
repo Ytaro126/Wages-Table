@@ -8,6 +8,7 @@
 
 /* ── CSS変数 ── */
 :root {
+  /* アプリ全体で使う色・サイズをまとめる（後で一括調整しやすい） */
   --bg:          linear-gradient(145deg, #1E293B 0%, #0F172A 100%);
   --card-bg:     rgba(255, 255, 255, 0.055);
   --card-border: 1px solid rgba(255, 255, 255, 0.115);
@@ -31,26 +32,34 @@
 }
 
 /* ── リセット ── */
+/* ブラウザごとの余白やサイズ差を消す */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {
+  /* 1rem = 16px に固定（計算しやすい） */
   font-size: 16px;
+  /* iOSで文字サイズが勝手に変わるのを抑止 */
   -webkit-text-size-adjust: 100%;
 }
 
 body {
+  /* フォントはiOSで見やすい標準系 */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display',
                'Helvetica Neue', sans-serif;
+  /* 背景はグラデーション固定 */
   background:            var(--bg);
   background-attachment: fixed;
   color:     var(--text-primary);
+  /* 画面の最小高さをビューポートに合わせる */
   min-height: 100dvh;
   overflow-x: hidden;
+  /* タップ時の青いハイライトを消す */
   -webkit-tap-highlight-color: transparent;
 }
 
 /* ── アプリラッパー ── */
 #app {
+  /* 画面幅に合わせて中央寄せ */
   width:     100%;
   max-width: 37.5rem;
   margin:    0 auto;
@@ -61,9 +70,11 @@ body {
 
 /* ── ヘッダー ── */
 .header {
+  /* スクロールしてもヘッダーを上に固定 */
   position: sticky;
   top:      0;
   z-index:  100;
+  /* iPhoneのノッチを避けた余白 */
   padding-top:    calc(env(safe-area-inset-top) + 0.875rem);
   padding-bottom: 0.75rem;
   padding-left:   var(--spacing);
@@ -85,6 +96,7 @@ body {
 .section { margin-top: 1rem; }
 
 .card {
+  /* 透け感のあるカード背景（ガラス風） */
   background:              var(--card-bg);
   backdrop-filter:         var(--card-blur);
   -webkit-backdrop-filter: var(--card-blur);
@@ -94,6 +106,7 @@ body {
 }
 
 .section-title {
+  /* 見出しは小さく・強調色で統一 */
   font-size:      0.6875rem;
   font-weight:    700;
   text-transform: uppercase;
@@ -103,6 +116,7 @@ body {
 }
 
 .section-note {
+  /* 補足説明は少し薄い色で */
   font-size:     0.75rem;
   color:         var(--text-muted);
   margin-bottom: 0.75rem;
@@ -112,6 +126,7 @@ body {
 /* ── カレンダー ── */
 
 /* スワイプアニメーション */
+/* will-change はアニメーションの滑らかさを上げるヒント */
 .calendar-swipe-wrapper { will-change: transform, opacity; }
 
 @keyframes slideFromRight {
@@ -126,6 +141,7 @@ body {
 .swipe-prev { animation: slideFromLeft  0.28s cubic-bezier(0.22, 1, 0.36, 1); }
 
 .calendar-nav {
+  /* 左右ボタンと月表示を横並び */
   display:         flex;
   align-items:     center;
   justify-content: space-between;
@@ -133,6 +149,7 @@ body {
 }
 
 .nav-btn {
+  /* 丸みとサイズを固定してタップしやすくする */
   display:         flex;
   align-items:     center;
   justify-content: center;
@@ -150,6 +167,7 @@ body {
 .nav-btn:active { background: rgba(255, 255, 255, 0.16); }
 
 .month-title {
+  /* 月表示はボタンとして扱い、タップでピッカーを開く */
   background: none;
   border:     none;
   color:      var(--text-primary);
@@ -164,11 +182,13 @@ body {
 
 /* 曜日ヘッダー */
 .calendar-dow {
+  /* 7列のグリッドにする */
   display:               grid;
   grid-template-columns: repeat(7, 1fr);
   margin-bottom: 0.25rem;
 }
 .dow-cell {
+  /* 曜日は小さめ文字で区切りを意識 */
   text-align:  center;
   font-size:   0.6875rem;
   font-weight: 600;
@@ -180,6 +200,7 @@ body {
 
 /* 日付グリッド */
 #calendarGrid {
+  /* 7列のカレンダー */
   display:               grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0.125rem;
@@ -187,6 +208,7 @@ body {
 
 /* ③ 改善: セルは税抜のみ1行（スッキリ）、税込はモーダルへ */
 .cal-cell {
+  /* 日付セルの見た目 */
   min-height:    3.5rem;   /* 56px */
   background:    rgba(255, 255, 255, 0.035);
   border:        1px solid rgba(255, 255, 255, 0.06);
@@ -201,11 +223,13 @@ body {
 }
 .cal-cell:active  { background: rgba(52, 211, 153, 0.14); }
 .cal-cell.selected {
+  /* 選択中の日付は緑枠＋背景で強調 */
   background:   rgba(52, 211, 153, 0.18);
   border-color: var(--accent);
   box-shadow:   0 0 0 1px var(--accent-glow);
 }
 .cal-blank {
+  /* 月初の空白セルはクリックできない */
   background:    transparent;
   border-color:  transparent;
   cursor:        default;
@@ -244,6 +268,7 @@ body {
   z-index:  1;
 }
 .cal-tax-ex {
+  /* 金額を折り返さず、はみ出す場合は…で省略 */
   font-size:            0.5625rem;
   font-weight:          700;
   color:                var(--accent);
@@ -270,6 +295,7 @@ body {
 }
 
 .mode-radio-group {
+  /* 2つのラジオを横並びにする */
   display: flex;
   gap:     0.5rem;
 }
@@ -337,6 +363,7 @@ body {
 
 /* ── ⑨ 改善: ±ステッパー ── */
 .stepper-wrap {
+  /* + / 入力 / - を横並びにする */
   display: flex;
   gap:     0.375rem;
   align-items: center;
@@ -385,6 +412,7 @@ body {
 }
 
 .form-input {
+  /* 入力欄は高さ固定＋16pxでiOSズーム対策 */
   width:      100%;
   height:     3rem;
   background: rgba(255, 255, 255, 0.07);
@@ -410,6 +438,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 /* ── ② 改善: リアルタイムプレビュー ── */
 .calc-preview {
+  /* プレビュー枠。中身が空なら非表示 */
   display:       flex;
   align-items:   center;
   justify-content: center;
@@ -478,6 +507,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 /* ── ボタン ── */
 .btn-primary {
+  /* 主要アクションボタン（保存） */
   display:         flex;
   align-items:     center;
   justify-content: center;
@@ -502,6 +532,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 }
 
 .btn-secondary {
+  /* サブボタン（控除保存やCSVなど） */
   display:         inline-flex;
   align-items:     center;
   justify-content: center;
@@ -522,11 +553,13 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 /* ── ④ 改善: 月合計・前月比 ── */
 #monthlyTotals {
+  /* 月合計は縦並びで表示 */
   display:        flex;
   flex-direction: column;
 }
 
 .total-row {
+  /* 1行のラベルと値を左右に配置 */
   display:         flex;
   justify-content: space-between;
   align-items:     baseline;
@@ -543,6 +576,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 }
 
 .total-divider {
+  /* セクション区切り線 */
   height:     1px;
   background: rgba(255, 255, 255, 0.08);
   margin:     0.375rem 0;
@@ -557,6 +591,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 /* ④ 前月比行 */
 .total-row--compare {
+  /* 前月比の強調ブロック */
   padding:       0.5rem 0.625rem;
   border-bottom: none;
   background:    rgba(255, 255, 255, 0.03);
@@ -578,6 +613,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 /* ── テーブル ── */
 .table-scroll {
+  /* スマホで横スクロールできるようにする */
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius-sm);
@@ -588,6 +624,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 }
 
 table {
+  /* 表の最小幅を確保して横スクロールを発生させる */
   width:           100%;
   min-width:       33rem;
   border-collapse: collapse;
@@ -616,6 +653,7 @@ tr:last-child td { border-bottom: none; }
 
 /* ⑥ 改善: 2段階削除ボタン */
 .btn-delete {
+  /* 削除ボタン（危険操作なので赤系） */
   display:         inline-flex;
   align-items:     center;
   justify-content: center;
@@ -647,6 +685,7 @@ tr:last-child td { border-bottom: none; }
 
 /* ── 下部固定保存バー ── */
 .save-bar {
+  /* 画面下に固定される保存バー */
   position: fixed;
   bottom:   0;
   left:     0;
@@ -662,6 +701,7 @@ tr:last-child td { border-bottom: none; }
 
 /* ── モーダル共通 ── */
 .modal {
+  /* 画面全体を覆うモーダルのベース */
   position: fixed;
   inset:    0;
   z-index:  200;
@@ -671,6 +711,7 @@ tr:last-child td { border-bottom: none; }
 .modal.hidden { display: none; }
 
 .modal-overlay {
+  /* 背景の暗いスクリーン */
   position:                absolute;
   inset:                   0;
   background:              rgba(0, 0, 0, 0.55);
@@ -679,6 +720,7 @@ tr:last-child td { border-bottom: none; }
 }
 
 .modal-content {
+  /* モーダル本体のパネル */
   position:   relative;
   width:      100%;
   background: #1C2537;
@@ -700,6 +742,7 @@ tr:last-child td { border-bottom: none; }
 }
 
 .modal-actions {
+  /* モーダル内のボタン横並び */
   display: flex;
   gap:     0.625rem;
   margin-top: 1rem;
@@ -711,6 +754,7 @@ tr:last-child td { border-bottom: none; }
 /* ── ピッカー ── */
 .picker-row { display: flex; gap: 0.75rem; margin-bottom: 0.25rem; }
 .picker-select {
+  /* 年/月のセレクトボックス */
   flex:       1;
   height:     3rem;
   background: rgba(255, 255, 255, 0.08);
@@ -730,6 +774,7 @@ tr:last-child td { border-bottom: none; }
 /* ── メモモーダル ── */
 #memoBody { display: flex; flex-direction: column; gap: 0; margin-bottom: 0.25rem; }
 .memo-row {
+  /* 詳細モーダルの1行 */
   display:         flex;
   justify-content: space-between;
   align-items:     baseline;

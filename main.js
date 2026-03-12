@@ -15,15 +15,21 @@
  * ============================================================ */
 
 'use strict';
+// strictモード: うっかりミス（未宣言変数など）を防ぐための安全装置
 
 /* ────────────────────────────────────────────────────────────
    1. 定数・状態管理
 ──────────────────────────────────────────────────────────── */
 
 const STORAGE_KEY = "delivery-wage-app-v1";
+// localStorageに保存するときの「箱の名前」。変えると別データ扱いになる。
 
 /**
  * アプリの状態
+ *
+ * records: 日別データの配列
+ * 例:
+ * { date: '2026-03-12', count: 80, count170: 2, pickupCount: 1, otherIncome: 0, mode: 'feature1' }
  *
  * currentMode : 入力フォームで現在選択中のモード（'feature1'|'feature2'|null）
  *               ① 旧: feature1Enabled/feature2Enabled（グローバル）→ 廃止
@@ -44,35 +50,42 @@ let state = {
 
 /** 機能1 金額（税抜） */
 function calcFeature1(count) {
+  // 80以下は一律14,000円。81以上は超過分×110円を加算。
   if (count <= 80) return 14000;
   return 14000 + (count - 80) * 110;
 }
 
 /** 税込計算（10%加算、端数は四捨五入） */
 function addTax(value) {
+  // 税込は税抜×1.1。Math.roundで四捨五入。
   return Math.round(value * 1.1);
 }
 
 /** レコードの税抜合計 */
 function calcRecordTaxEx(rec) {
+  // 計算モードで配達単価が変わる
   let base = 0;
   if (rec.mode === 'feature1') base = calcFeature1(rec.count);
   else if (rec.mode === 'feature2') base = rec.count * 150;
 
+  // 夜間配達(170円)・集荷(90円)・その他収入は税抜に加算
   return base + rec.count170 * 170 + rec.pickupCount * 90 + rec.otherIncome;
 }
 
 /** レコードの税込合計 */
 function calcRecordTaxIn(rec) {
+  // 税込側は機能1のみ10%加算が必要
   let base = 0;
   if (rec.mode === 'feature1') base = addTax(calcFeature1(rec.count));
   else if (rec.mode === 'feature2') base = rec.count * 165;
 
+  // 夜間配達は税込187円、集荷とその他は税込同額で加算
   return base + rec.count170 * 187 + rec.pickupCount * 90 + rec.otherIncome;
 }
 
 /** 指定年月のレコード配列を返す */
 function getMonthRecords(year, month) {
+  // YYYY-MM の接頭辞でフィルタする
   const prefix = toMonthKey(year, month);
   return state.records.filter(r => r.date.startsWith(prefix));
 }
@@ -82,22 +95,27 @@ function getMonthRecords(year, month) {
  * ④ 前月比の計算でも使うため、前月も同じ関数で計算する
  */
 function calcMonthlyTotals(year, month) {
+  // 月内レコードを集めて合計値を作る
   const recs = getMonthRecords(year, month);
   let totalCount = 0, total170 = 0, totalPickup = 0, totalOther = 0;
   let totalF1 = 0, totalF2Ex = 0, totalF2In = 0;
   let totalEx = 0, totalIn = 0;
 
   recs.forEach(r => {
+    // 数量合計
     totalCount  += r.count;
     total170    += r.count170;
     totalPickup += r.pickupCount;
     totalOther  += r.otherIncome;
+    // モード別合計
     if (r.mode === 'feature1') { const f = calcFeature1(r.count); totalF1 += f; }
     else if (r.mode === 'feature2') { totalF2Ex += r.count * 150; totalF2In += r.count * 165; }
+    // 税抜/税込合計
     totalEx += calcRecordTaxEx(r);
     totalIn += calcRecordTaxIn(r);
   });
 
+  // 月固定控除（YYYY-MMキーで保持）
   const deduction = state.monthlyDeductions[toMonthKey(year, month)] || 0;
   return {
     totalCount, total170, totalPickup, totalOther,
@@ -114,14 +132,17 @@ function calcMonthlyTotals(year, month) {
 ──────────────────────────────────────────────────────────── */
 
 function saveState() {
+  // JSON文字列にしてlocalStorageへ保存
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { console.warn('保存失敗:', e); }
 }
 
 function loadState() {
+  // 保存がなければ何もしない
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
   try {
+    // 文字列 → オブジェクト
     const saved = JSON.parse(raw);
     state = { ...state, ...saved };
 
@@ -144,13 +165,17 @@ function loadState() {
  * ⑦ 記録ありの日にドットインジケーターを表示
  */
 function renderCalendar() {
+  // カレンダーのヘッダー（年月）を更新
   const { viewYear, viewMonth, selectedDate } = state;
   document.getElementById('monthTitle').textContent = `${viewYear}年${viewMonth + 1}月`;
 
+  // いったん空にしてから作り直す（表示のズレ防止）
   const grid = document.getElementById('calendarGrid');
   grid.innerHTML = '';
 
+  // その月の「1日」が何曜日か
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+  // その月の最終日
   const lastDate        = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   // 空白セル
@@ -162,6 +187,7 @@ function renderCalendar() {
 
   // 日付セル
   for (let d = 1; d <= lastDate; d++) {
+    // dateStr はデータ検索用のキー
     const dateStr = toDateStr(viewYear, viewMonth, d);
     const rec     = state.records.find(r => r.date === dateStr);
 
@@ -194,13 +220,14 @@ function renderCalendar() {
       cell.appendChild(amountDiv);
     }
 
-    // セルタップ → 日付選択
+    // セルタップ時の動作
     cell.addEventListener('click', () => {
       // 既に選択中の日付をタップしたら詳細を開く
       if (state.selectedDate === dateStr) {
         if (rec) showMemoModal(rec);
         return;
       }
+      // 未選択なら選択し、フォームへ反映
       state.selectedDate = dateStr;
       saveState();
       renderCalendar();
@@ -217,6 +244,7 @@ function renderCalendar() {
  * ② プレビューも更新する
  */
 function syncFormFromSelectedDate() {
+  // 選択日の値をフォームに反映（未記録なら空欄）
   const { selectedDate } = state;
   document.getElementById('selectedDateDisplay').value = selectedDate || '';
 
@@ -229,6 +257,7 @@ function syncFormFromSelectedDate() {
 
   // ① レコードのモードがあればラジオに反映、なければ currentMode を保持
   if (rec) {
+    // 記録済みなら、その日のモードをフォームに合わせる
     state.currentMode = rec.mode;
     saveState();
   }
@@ -240,6 +269,7 @@ function syncFormFromSelectedDate() {
  * ① ラジオボタンを state.currentMode に合わせて更新する
  */
 function renderModeRadio() {
+  // ラジオボタンは state.currentMode を見てON/OFFを決める
   const r1 = document.getElementById('modeFeature1');
   const r2 = document.getElementById('modeFeature2');
   if (r1) r1.checked = state.currentMode === 'feature1';
@@ -251,14 +281,17 @@ function renderModeRadio() {
  * モードと入力値から予想金額を計算して表示
  */
 function updatePreview() {
+  // 入力値だけで仮計算（保存はしない）
   const previewEl = document.getElementById('calcPreview');
   const mode = getSelectedMode();
 
   if (!mode) {
+    // モード未選択なら表示しない
     previewEl.innerHTML = '';
     return;
   }
 
+  // 入力値を読み取って、仮レコードを作る
   const mockRec = {
     count:       parseInputInt('inputCount'),
     count170:    parseInputInt('inputCount170'),
@@ -270,6 +303,7 @@ function updatePreview() {
   const ex  = calcRecordTaxEx(mockRec);
   const inc = calcRecordTaxIn(mockRec);
 
+  // 税抜 / 税込 を1行で表示
   previewEl.innerHTML =
     `<span class="preview-label">本日の予想合計</span>` +
     `<span class="preview-ex">${yen(ex)}</span>` +
@@ -282,17 +316,18 @@ function updatePreview() {
  * ④ 前月比を追加表示
  */
 function renderMonthlyTotals() {
+  // 表示中の月の合計を再計算して表示する
   const { viewYear, viewMonth } = state;
   const t = calcMonthlyTotals(viewYear, viewMonth);
 
-  // ④ 前月を計算
+  // ④ 前月の合計も計算して比較に使う
   const prevMonth = viewMonth === 0 ? 11 : viewMonth - 1;
   const prevYear  = viewMonth === 0 ? viewYear - 1 : viewYear;
   const pt = calcMonthlyTotals(prevYear, prevMonth);
   const diffEx = t.finalEx - pt.finalEx;
   const diffIn = t.finalIn - pt.finalIn;
 
-  // 前月比の表示用ヘルパー
+  // 前月比の表示用ヘルパー（色や記号を決める）
   const compareClass = (diff) => diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
   const compareSign  = (diff) => diff > 0 ? '+' : '';
   const compareArrow = (diff) => diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
@@ -337,6 +372,7 @@ function renderMonthlyTotals() {
  * ⑥ 削除ボタンは2段階確認（1回目→確認状態、2回目→実行）
  */
 function renderTable() {
+  // 表示中の月のレコードだけを一覧に出す
   const recs = getMonthRecords(state.viewYear, state.viewMonth);
   const tbody = document.getElementById('recordsBody');
   tbody.innerHTML = '';
@@ -349,6 +385,7 @@ function renderTable() {
   recs.sort((a, b) => a.date.localeCompare(b.date));
 
   recs.forEach(rec => {
+    // 1行分の税抜/税込を先に計算
     const ex  = calcRecordTaxEx(rec);
     const inc = calcRecordTaxIn(rec);
     const f1  = rec.mode === 'feature1' ? yen(calcFeature1(rec.count)) : '—';
@@ -356,7 +393,7 @@ function renderTable() {
 
     const tr = document.createElement('tr');
 
-    // データセル
+    // データセル（文字列化して順番に入れる）
     const dataCells = [
       rec.date.slice(5).replace('-', '/'),
       rec.count,
@@ -373,7 +410,7 @@ function renderTable() {
       tr.appendChild(td);
     });
 
-    // ⑥ 削除ボタン（2段階確認）
+    // 削除ボタン（2段階確認）
     const deleteTd  = document.createElement('td');
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-delete';
@@ -413,12 +450,14 @@ function renderTable() {
 
 /** 控除額入力欄を表示月のデータで更新 */
 function renderDeductionInput() {
+  // 表示中の月に対応する控除額を入力欄へ
   const val = state.monthlyDeductions[toMonthKey(state.viewYear, state.viewMonth)];
   document.getElementById('inputDeduction').value = val !== undefined ? val : '';
 }
 
 /** 全体を再描画する */
 function renderAll() {
+  // 画面全体の表示をまとめて更新
   renderCalendar();
   renderMonthlyTotals();
   renderTable();
@@ -433,11 +472,13 @@ function renderAll() {
 
 /** 日別詳細モーダルを表示する（税込も含む全情報） */
 function showMemoModal(rec) {
+  // その日の内訳をモーダルに表示する
   const ex  = calcRecordTaxEx(rec);
   const inc = calcRecordTaxIn(rec);
 
   document.getElementById('memoTitle').textContent = `${rec.date} の記録`;
 
+  // 1行分のHTMLを作る小さな関数
   const memoRow = (label, value, mod = '') => {
     const cls = mod ? `memo-row memo-row--${mod}` : 'memo-row';
     return `<div class="${cls}">
@@ -460,10 +501,12 @@ function showMemoModal(rec) {
 
 /** 年月ピッカーを表示する */
 function showPickerModal() {
+  // 年/月のセレクトを現在の表示月で初期化する
   const yearSel  = document.getElementById('pickerYear');
   const monthSel = document.getElementById('pickerMonth');
 
   yearSel.innerHTML = '';
+  // 年は2025〜2030の範囲で固定
   for (let y = 2025; y <= 2030; y++) {
     const opt = document.createElement('option');
     opt.value = y; opt.textContent = `${y}年`;
@@ -472,6 +515,7 @@ function showPickerModal() {
   }
 
   monthSel.innerHTML = '';
+  // 月は0〜11（表示は1〜12）
   for (let m = 0; m < 12; m++) {
     const opt = document.createElement('option');
     opt.value = m; opt.textContent = `${m + 1}月`;
@@ -489,12 +533,14 @@ function showPickerModal() {
 function setupEvents() {
 
   // ── 月切り替え ──
+  // ボタン押下で表示月を移動
   document.getElementById('prevMonth').addEventListener('click', () => goMonth(-1));
   document.getElementById('nextMonth').addEventListener('click', () => goMonth(1));
   document.getElementById('monthTitle').addEventListener('click', showPickerModal);
 
   // ── ピッカー ──
   document.getElementById('pickerConfirm').addEventListener('click', () => {
+    // セレクトの値を数値に変換して反映
     state.viewYear  = parseInt(document.getElementById('pickerYear').value,  10);
     state.viewMonth = parseInt(document.getElementById('pickerMonth').value, 10);
     saveState();
@@ -517,6 +563,7 @@ function setupEvents() {
   // ── ① モードラジオボタン ──
   document.querySelectorAll('input[name="mode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
+      // ラジオ選択はフォームの状態にだけ影響
       state.currentMode = e.target.value;
       saveState();
       updatePreview(); // ② プレビュー即時更新
@@ -553,6 +600,7 @@ function setupEvents() {
 
   // ── 控除額保存 ──
   document.getElementById('saveDeduction').addEventListener('click', () => {
+    // 月キーで控除額を保存
     const monthKey = toMonthKey(state.viewYear, state.viewMonth);
     state.monthlyDeductions[monthKey] = parseInputInt('inputDeduction');
     saveState();
@@ -572,6 +620,7 @@ function setupEvents() {
  * data-target に input の id、data-delta に変化量を指定
  */
 function handleStepperClick(e) {
+  // ステッパーの + / - ボタンの共通処理
   const btn = e.target.closest('.stepper-btn');
   if (!btn) return;
 
@@ -597,15 +646,18 @@ function handleStepperClick(e) {
  * ① モードをラジオボタンから取得（日ごとに異なってよい）
  */
 function saveRecord() {
+  // 入力内容を保存する処理
   clearMessage('formMessage');
 
   // バリデーション
   if (!state.selectedDate) {
+    // 日付未選択は保存できない
     showMessage('日付を選択してください', 'error', 'formMessage');
     return;
   }
   const mode = getSelectedMode();
   if (!mode) {
+    // モード未選択は保存できない
     showMessage('計算モード（機能1 または 機能2）を選択してください', 'error', 'formMessage');
     return;
   }
@@ -619,6 +671,7 @@ function saveRecord() {
     mode,
   };
 
+  // 既存レコードがあれば上書き、なければ追加
   const idx = state.records.findIndex(r => r.date === state.selectedDate);
   if (idx >= 0) state.records[idx] = newRecord;
   else          state.records.push(newRecord);
@@ -633,6 +686,7 @@ function saveRecord() {
  * selectedDate より前で最も新しいレコードを探す
  */
 function fillPrevRecord() {
+  // 直前の記録をフォームにコピーする
   if (!state.selectedDate) {
     showMessage('先に日付を選択してください', 'error', 'formMessage');
     return;
@@ -666,6 +720,7 @@ function fillPrevRecord() {
  * BOM付きUTF-8でExcelでも文字化けしない
  */
 function exportCSV() {
+  // 表示中の月だけをCSVにしてダウンロード
   const { viewYear, viewMonth } = state;
   const recs = getMonthRecords(viewYear, viewMonth).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -705,6 +760,7 @@ function exportCSV() {
  * @param {number} delta - 移動量（-1 = 前月, +1 = 翌月）
  */
 function goMonth(delta) {
+  // 月をまたぐ時に年も調整する
   let m = state.viewMonth + delta;
   let y = state.viewYear;
   if (m > 11) { m = 0;  y++; }
@@ -714,7 +770,7 @@ function goMonth(delta) {
   saveState();
   renderAll();
 
-  // スワイプアニメーションを付与
+  // スワイプアニメーションを付与（視覚的に月が動いた感）
   const wrapper   = document.getElementById('calendarSwipe');
   const animClass = delta > 0 ? 'swipe-next' : 'swipe-prev';
   wrapper.classList.remove('swipe-next', 'swipe-prev');
@@ -731,6 +787,7 @@ function goMonth(delta) {
  * 水平移動が垂直移動より大きく、かつ50px以上でスワイプと判定
  */
 function setupSwipe() {
+  // 指の移動量から左右スワイプを判定する
   const wrapper = document.getElementById('calendarSwipe');
   let startX = 0, startY = 0;
 
@@ -740,6 +797,7 @@ function setupSwipe() {
   }, { passive: true });
 
   wrapper.addEventListener('touchend', (e) => {
+    // 横移動が縦移動より大きい場合だけ月移動
     const dx = e.changedTouches[0].clientX - startX;
     const dy = e.changedTouches[0].clientY - startY;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
@@ -754,27 +812,32 @@ function setupSwipe() {
 
 /** 数値を円表記に変換: 13200 → '¥13,200' */
 function yen(n) {
+  // toLocaleString で3桁カンマを付ける
   return '¥' + Math.round(n).toLocaleString('ja-JP');
 }
 
 /** 年月日 → 'YYYY-MM-DD' */
 function toDateStr(year, month, day) {
+  // monthは0始まりなので +1 して2桁化
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 /** 年月 → 'YYYY-MM'（localStorage キー用） */
 function toMonthKey(year, month) {
+  // 月単位で保存するキー
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
 /** input 要素の値を 0以上の整数で返す（空欄・不正値は 0） */
 function parseInputInt(id) {
+  // 空欄や負数は0にする
   const v = parseInt(document.getElementById(id).value, 10);
   return (isNaN(v) || v < 0) ? 0 : v;
 }
 
 /** ① ラジオボタンから現在選択中のモードを返す */
 function getSelectedMode() {
+  // ラジオの状態から現在のモードを返す
   const r1 = document.getElementById('modeFeature1');
   const r2 = document.getElementById('modeFeature2');
   if (r1 && r1.checked) return 'feature1';
@@ -789,6 +852,7 @@ function getSelectedMode() {
  * @param {string} targetId - 表示先要素の id
  */
 function showMessage(text, type, targetId) {
+  // 画面に一時メッセージを出す
   const el = document.getElementById(targetId);
   el.textContent = text;
   el.className   = `form-message ${type}`;
@@ -799,6 +863,7 @@ function showMessage(text, type, targetId) {
 
 /** メッセージをクリアする */
 function clearMessage(targetId) {
+  // メッセージ表示を消す
   const el = document.getElementById(targetId);
   el.textContent = '';
   el.className   = 'form-message';
@@ -809,6 +874,7 @@ function clearMessage(targetId) {
 ──────────────────────────────────────────────────────────── */
 
 function init() {
+  // 起動時に「保存読込 → イベント登録 → 描画」の順で実行
   loadState();
   setupEvents();
   renderAll();
