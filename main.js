@@ -42,10 +42,15 @@ let state = {
    2. 計算系関数
 ──────────────────────────────────────────────────────────── */
 
-/** 機能1 金額（税抜 = 税込） */
+/** 機能1 金額（税抜） */
 function calcFeature1(count) {
   if (count <= 80) return 14000;
   return 14000 + (count - 80) * 110;
+}
+
+/** 税込計算（10%加算、端数は四捨五入） */
+function addTax(value) {
+  return Math.round(value * 1.1);
 }
 
 /** レコードの税抜合計 */
@@ -60,7 +65,7 @@ function calcRecordTaxEx(rec) {
 /** レコードの税込合計 */
 function calcRecordTaxIn(rec) {
   let base = 0;
-  if (rec.mode === 'feature1') base = calcFeature1(rec.count);
+  if (rec.mode === 'feature1') base = addTax(calcFeature1(rec.count));
   else if (rec.mode === 'feature2') base = rec.count * 165;
 
   return base + rec.count170 * 187 + rec.pickupCount * 90 + rec.otherIncome;
