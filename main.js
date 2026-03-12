@@ -191,16 +191,16 @@ function renderCalendar() {
       exSpan.textContent = yen(ex);
       amountDiv.appendChild(exSpan);
 
-      // 金額タップ → 詳細モーダル（セルタップと分離）
-      amountDiv.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showMemoModal(rec);
-      });
       cell.appendChild(amountDiv);
     }
 
     // セルタップ → 日付選択
     cell.addEventListener('click', () => {
+      // 既に選択中の日付をタップしたら詳細を開く
+      if (state.selectedDate === dateStr) {
+        if (rec) showMemoModal(rec);
+        return;
+      }
       state.selectedDate = dateStr;
       saveState();
       renderCalendar();
@@ -309,7 +309,7 @@ function renderMonthlyTotals() {
   const container = document.getElementById('monthlyTotals');
   container.innerHTML =
     row('配達完了数',         `${t.totalCount} 件`) +
-    row('170円枠',            `${t.total170} 件`) +
+    row('夜間配達',          `${t.total170} 件`) +
     row('集荷枠',             `${t.totalPickup} 件`) +
     row('その他収入',         yen(t.totalOther)) +
     `<div class="total-divider"></div>` +
@@ -448,7 +448,7 @@ function showMemoModal(rec) {
 
   document.getElementById('memoBody').innerHTML =
     memoRow('配達完了数',   `${rec.count} 件`) +
-    memoRow('170円配達枠', `${rec.count170} 件`) +
+    memoRow('夜間配達枠', `${rec.count170} 件`) +
     memoRow('集荷枠',       `${rec.pickupCount} 件`) +
     memoRow('その他収入',   yen(rec.otherIncome)) +
     memoRow('計算モード',   rec.mode === 'feature1' ? '機能1' : '機能2') +
@@ -674,7 +674,7 @@ function exportCSV() {
     return;
   }
 
-  const headers = ['日付', '配達数', '170枠', '集荷', 'その他収入', 'モード', '合算(税抜)', '合算(税込)'];
+  const headers = ['日付', '配達数', '夜間', '集荷', 'その他収入', 'モード', '合算(税抜)', '合算(税込)'];
   const rows = recs.map(r => [
     r.date,
     r.count,
