@@ -317,6 +317,7 @@ body {
 .mode-radio-group {
   /* 2つのラジオを横並びにする */
   display: flex;
+  flex-direction: column;
   gap:     0.5rem;
 }
 
