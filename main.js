@@ -31,9 +31,8 @@ const STORAGE_KEY = "delivery-wage-app-v1";
  * 例:
  * { date: '2026-03-12', count: 80, count170: 2, pickupCount: 1, otherIncome: 0, mode: 'feature1' }
  *
- * currentMode : 入力フォームで現在選択中のモード（'feature1'|'feature2'|null）
- *               ① 旧: feature1Enabled/feature2Enabled（グローバル）→ 廃止
- *               各レコードに mode を持つため、この値はフォームのUI状態のみ担う
+ * currentMode : 設定画面で選ぶ「新規記録のモード」（'feature1'|'feature2'|null）
+ *               既存レコードの mode は変更しない（過去記録は固定）
  */
 let state = {
   records:           [],
@@ -42,6 +41,8 @@ let state = {
   selectedDate:      null,
   viewYear:          new Date().getFullYear(),
   viewMonth:         new Date().getMonth(),
+  theme:             'dark',
+  chartYear:         new Date().getFullYear(),
 };
 
 /* ────────────────────────────────────────────────────────────
@@ -255,13 +256,10 @@ function syncFormFromSelectedDate() {
   document.getElementById('inputPickup').value   = rec ? rec.pickupCount : '';
   document.getElementById('inputOther').value    = rec ? rec.otherIncome : '';
 
-  // ① レコードのモードがあればラジオに反映、なければ currentMode を保持
-  if (rec) {
-    // 記録済みなら、その日のモードをフォームに合わせる
-    state.currentMode = rec.mode;
-    saveState();
-  }
+  // 既存レコードのモードは「その記録だけ」のもの。
+  // 設定で選んだ currentMode は変更しない（過去記録が勝手に変わらないようにする）。
   renderModeRadio();
+  updateCurrentModeDisplay();
   updatePreview(); // ② プレビュー更新
 }
 
@@ -274,6 +272,15 @@ function renderModeRadio() {
   const r2 = document.getElementById('modeFeature2');
   if (r1) r1.checked = state.currentMode === 'feature1';
   if (r2) r2.checked = state.currentMode === 'feature2';
+  updateCurrentModeDisplay();
+}
+
+function updateCurrentModeDisplay() {
+  const el = document.getElementById('currentModeDisplay');
+  if (!el) return;
+  if (state.currentMode === 'feature1') el.textContent = '機能1';
+  else if (state.currentMode === 'feature2') el.textContent = '機能2';
+  else el.textContent = '未設定';
 }
 
 /**
@@ -466,6 +473,35 @@ function renderAll() {
   syncFormFromSelectedDate(); // ← 内部で updatePreview も呼ばれる
 }
 
+// 画面切り替え（ホーム/設定/年間グラフ）
+function showView(name) {
+  ['viewHome', 'viewSettings', 'viewAnnual'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', id === `view${name}`);
+  });
+
+  // 保存バーはホームだけ表示
+  const saveBar = document.querySelector('.save-bar');
+  if (saveBar) saveBar.style.display = name === 'Home' ? 'block' : 'none';
+
+  if (name === 'Annual') renderAnnualChart(state.chartYear);
+}
+
+function openMenu() {
+  document.getElementById('menuModal').classList.remove('hidden');
+}
+
+function closeMenu() {
+  document.getElementById('menuModal').classList.add('hidden');
+}
+
+function applyTheme(theme) {
+  state.theme = theme;
+  document.body.classList.toggle('theme-light', theme === 'light');
+  saveState();
+}
+
 /* ────────────────────────────────────────────────────────────
    5. モーダル制御
 ──────────────────────────────────────────────────────────── */
@@ -560,6 +596,33 @@ function setupEvents() {
     });
   });
 
+  // ── メニュー ──
+  document.getElementById('menuButton').addEventListener('click', openMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuHome').addEventListener('click', () => {
+    closeMenu();
+    showView('Home');
+  });
+  document.getElementById('menuSettings').addEventListener('click', () => {
+    closeMenu();
+    showView('Settings');
+  });
+  document.getElementById('menuAnnual').addEventListener('click', () => {
+    closeMenu();
+    showView('Annual');
+  });
+
+  // ── テーマ切替 ──
+  document.getElementById('themeDark').addEventListener('click', () => applyTheme('dark'));
+  document.getElementById('themeLight').addEventListener('click', () => applyTheme('light'));
+
+  // ── 年間グラフ 年選択 ──
+  document.getElementById('annualYear').addEventListener('change', (e) => {
+    state.chartYear = parseInt(e.target.value, 10);
+    saveState();
+    renderAnnualChart(state.chartYear);
+  });
+
   // ── 保存確認モーダル ──
   ['saveConfirmCancel', 'saveConfirmOverlay'].forEach(id => {
     document.getElementById(id).addEventListener('click', closeSaveConfirm);
@@ -576,6 +639,7 @@ function setupEvents() {
       state.currentMode = e.target.value;
       saveState();
       updatePreview(); // ② プレビュー即時更新
+      updateCurrentModeDisplay();
     });
   });
 
@@ -767,9 +831,7 @@ function fillPrevRecord() {
   document.getElementById('inputPickup').value   = prev.pickupCount;
   document.getElementById('inputOther').value    = prev.otherIncome;
 
-  // ① モードも前回に合わせる
-  state.currentMode = prev.mode;
-  renderModeRadio();
+  // モードは「設定画面の選択」を優先するため変更しない
 
   updatePreview(); // ② プレビュー更新
   showMessage(`${prev.date} の値を適用しました`, 'success', 'formMessage');
@@ -839,6 +901,55 @@ function goMonth(delta) {
     wrapper.addEventListener('animationend', () => {
       wrapper.classList.remove(animClass);
     }, { once: true });
+  });
+}
+
+/**
+ * 年間グラフを描画する（税抜/税込の2本バー）
+ */
+function renderAnnualChart(year) {
+  const container = document.getElementById('annualChart');
+  if (!container) return;
+
+  const data = [];
+  let max = 0;
+  for (let m = 0; m < 12; m++) {
+    const t = calcMonthlyTotals(year, m);
+    const ex = t.finalEx;
+    const inc = t.finalIn;
+    data.push({ month: m + 1, ex, inc });
+    max = Math.max(max, ex, inc);
+  }
+  if (max === 0) max = 1;
+
+  container.innerHTML = '';
+  data.forEach(item => {
+    const group = document.createElement('div');
+    group.className = 'bar-group';
+
+    const stack = document.createElement('div');
+    stack.className = 'bar-stack';
+
+    const barEx = document.createElement('div');
+    barEx.className = 'bar ex';
+    barEx.style.height = `${Math.round((item.ex / max) * 100)}%`;
+    barEx.title = `税抜: ${yen(item.ex)}`;
+
+    const barInc = document.createElement('div');
+    barInc.className = 'bar inc';
+    barInc.style.height = `${Math.round((item.inc / max) * 100)}%`;
+    barInc.title = `税込: ${yen(item.inc)}`;
+
+    stack.appendChild(barEx);
+    stack.appendChild(barInc);
+
+    const label = document.createElement('div');
+    label.className = 'bar-label';
+    label.textContent = `${item.month}月`;
+
+    group.appendChild(stack);
+    group.appendChild(label);
+    container.appendChild(group);
   });
 }
 
@@ -929,15 +1040,31 @@ function clearMessage(targetId) {
   el.className   = 'form-message';
 }
 
+function setupAnnualYearOptions() {
+  const select = document.getElementById('annualYear');
+  if (!select) return;
+  select.innerHTML = '';
+  for (let y = 2025; y <= 2030; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}年`;
+    if (y === state.chartYear) opt.selected = true;
+    select.appendChild(opt);
+  }
+}
+
 /* ────────────────────────────────────────────────────────────
    8. 初期化
 ──────────────────────────────────────────────────────────── */
 
 function init() {
-  // 起動時に「保存読込 → イベント登録 → 描画」の順で実行
+  // 起動時に「保存読込 → テーマ反映 → イベント登録 → 描画」の順で実行
   loadState();
+  applyTheme(state.theme || 'dark');
+  setupAnnualYearOptions();
   setupEvents();
   renderAll();
+  showView('Home');
 }
 
 document.addEventListener('DOMContentLoaded', init);

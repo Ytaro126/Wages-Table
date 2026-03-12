@@ -72,6 +72,7 @@ body {
 .header {
   /* スクロールしてもヘッダーを上に固定 */
   position: sticky;
+  position: relative;
   top:      0;
   z-index:  100;
   /* iPhoneのノッチを避けた余白 */
@@ -86,6 +87,21 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   text-align: center;
 }
+.menu-btn {
+  position: absolute;
+  left: var(--spacing);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.menu-btn:active { opacity: 0.6; }
 .app-title {
   font-size:      1.0625rem;
   font-weight:    700;
@@ -94,6 +110,10 @@ body {
 
 /* ── セクション・カード ── */
 .section { margin-top: 1rem; }
+
+/* 画面切り替え */
+.view { display: none; }
+.view.active { display: block; }
 
 .card {
   /* 透け感のあるカード背景（ガラス風） */
@@ -298,6 +318,19 @@ body {
   /* 2つのラジオを横並びにする */
   display: flex;
   gap:     0.5rem;
+}
+
+/* 設定で選ぶ「現在のモード」表示 */
+.mode-current {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
 .mode-radio-label {
@@ -699,6 +732,84 @@ tr:last-child td { border-bottom: none; }
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* メニュー一覧 */
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* テーマ切替 */
+.theme-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* 年間グラフ */
+.annual-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0.25rem;
+  align-items: end;
+  min-height: 10rem;
+}
+.bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.bar-stack {
+  display: flex;
+  gap: 0.125rem;
+  align-items: flex-end;
+  height: 8rem;
+}
+.bar {
+  width: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--accent);
+}
+.bar.inc { background: #60A5FA; }
+.bar-label {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 0.375rem; }
+.legend-swatch {
+  width: 0.75rem;
+  height: 0.5rem;
+  background: var(--accent);
+  border-radius: 0.125rem;
+}
+.legend-swatch.inc { background: #60A5FA; }
+
+/* ライトモード */
+body.theme-light {
+  --bg: #F4F6FB;
+  --card-bg: #FFFFFF;
+  --card-border: 1px solid rgba(15, 23, 42, 0.08);
+  --card-blur: blur(0px);
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+}
+body.theme-light .header {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+body.theme-light .save-bar {
+  background: rgba(255, 255, 255, 0.95);
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
 /* ── モーダル共通 ── */
 .modal {
   /* 画面全体を覆うモーダルのベース */
@@ -706,7 +817,7 @@ tr:last-child td { border-bottom: none; }
   inset:    0;
   z-index:  200;
   display:  flex;
-  align-items: flex-end;
+  align-items: stretch;
 }
 .modal.hidden { display: none; }
 
@@ -717,21 +828,31 @@ tr:last-child td { border-bottom: none; }
   background:              rgba(0, 0, 0, 0.55);
   backdrop-filter:         blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.35s ease;
 }
 
 .modal-content {
   /* モーダル本体のパネル */
   position:   relative;
   width:      100%;
+  max-width:  22rem;
   background: #1C2537;
   border:     1px solid rgba(255, 255, 255, 0.12);
-  border-top-left-radius:  1.5rem;
-  border-top-right-radius: 1.5rem;
+  border-radius: 1rem;
   padding:     1.5rem var(--spacing);
-  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
-  max-height:  80dvh;
+  padding-bottom: 1.5rem;
+  max-height:  90dvh;
   overflow-y:  auto;
   -webkit-overflow-scrolling: touch;
+  transform: translateX(110%);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.modal:not(.hidden) .modal-content {
+  transform: translateX(0);
+}
+.modal:not(.hidden) .modal-overlay {
+  opacity: 1;
 }
 
 .modal-title {

@@ -36,8 +36,13 @@
 
   <!-- ヘッダー（アプリ名を表示） -->
   <header class="header">
+    <!-- ハンバーガーメニュー -->
+    <button class="menu-btn" id="menuButton" aria-label="メニューを開く">☰</button>
     <h1 class="app-title">配達記録</h1>
   </header>
+
+  <!-- ホーム画面 -->
+  <div class="view view-home active" id="viewHome">
 
   <!-- ① カレンダー（表示月の切り替え・日付選択） -->
   <section class="section card" id="calendarSection">
@@ -75,31 +80,10 @@
              readonly placeholder="カレンダーから日付を選択">
     </div>
 
-    <!-- 計算モード（機能1/機能2。どちらか1つを選ぶ） -->
+    <!-- 現在の計算モード（設定画面で決める） -->
     <div class="form-group">
-      <label class="form-label">
-        計算モード <span class="required-badge">必須</span>
-      </label>
-      <!--
-        name="mode" を同じにすることでラジオが排他になる。
-        value で保存値（feature1/feature2）を持つ。
-      -->
-      <div class="mode-radio-group">
-        <label class="mode-radio-label" id="modeLabel1">
-          <input type="radio" name="mode" id="modeFeature1" value="feature1">
-          <span class="mode-radio-content">
-            <strong>機能1</strong>
-            <small>80個以下¥14,000 / 81↑+¥110/個</small>
-          </span>
-        </label>
-        <label class="mode-radio-label" id="modeLabel2">
-          <input type="radio" name="mode" id="modeFeature2" value="feature2">
-          <span class="mode-radio-content">
-            <strong>機能2</strong>
-            <small>税抜¥150 / 税込¥165/個</small>
-          </span>
-        </label>
-      </div>
+      <label class="form-label">計算モード（設定）</label>
+      <div class="mode-current" id="currentModeDisplay">未設定</div>
     </div>
 
     <!-- 数値入力（±ボタン付きステッパー） -->
@@ -155,22 +139,6 @@
     <p id="formMessage" class="form-message" role="alert" aria-live="polite"></p>
   </section>
 
-  <!-- 月固定控除（この月の合計から引く額） -->
-  <section class="section card">
-    <h2 class="section-title">月固定控除</h2>
-    <p class="section-note">表示中の月の最終合計から差し引く固定額</p>
-    <div class="form-group">
-      <label class="form-label" for="inputDeduction">控除額（円）</label>
-      <div class="stepper-wrap">
-        <button class="stepper-btn" data-target="inputDeduction" data-delta="-1000" aria-label="1000減らす">−</button>
-        <input type="number" id="inputDeduction" class="form-input stepper-input"
-               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
-        <button class="stepper-btn" data-target="inputDeduction" data-delta="1000" aria-label="1000増やす">＋</button>
-      </div>
-    </div>
-    <button class="btn-secondary btn-full" id="saveDeduction">控除額を保存</button>
-  </section>
-
   <!-- 月合計（前月比も表示） -->
   <section class="section card">
     <h2 class="section-title">月合計</h2>
@@ -205,6 +173,75 @@
       </table>
     </div>
   </section>
+
+  </div><!-- /#viewHome -->
+
+  <!-- 設定画面 -->
+  <div class="view view-settings" id="viewSettings">
+    <section class="section card">
+      <h2 class="section-title">設定</h2>
+      <p class="section-note">新規記録に適用されます（過去の記録は変更されません）</p>
+
+      <!-- 計算モード設定 -->
+      <div class="form-group">
+        <label class="form-label">
+          計算モード <span class="required-badge">必須</span>
+        </label>
+        <div class="mode-radio-group">
+          <label class="mode-radio-label" id="modeLabel1">
+            <input type="radio" name="mode" id="modeFeature1" value="feature1">
+            <span class="mode-radio-content">
+              <strong>機能1</strong>
+              <small>80個以下¥14,000 / 81↑+¥110/個</small>
+            </span>
+          </label>
+          <label class="mode-radio-label" id="modeLabel2">
+            <input type="radio" name="mode" id="modeFeature2" value="feature2">
+            <span class="mode-radio-content">
+              <strong>機能2</strong>
+              <small>税抜¥150 / 税込¥165/個</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 月固定控除 -->
+      <div class="form-group">
+        <label class="form-label" for="inputDeduction">月固定控除（円）</label>
+        <div class="stepper-wrap">
+          <button class="stepper-btn" data-target="inputDeduction" data-delta="-1000" aria-label="1000減らす">−</button>
+          <input type="number" id="inputDeduction" class="form-input stepper-input"
+                 min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+          <button class="stepper-btn" data-target="inputDeduction" data-delta="1000" aria-label="1000増やす">＋</button>
+        </div>
+      </div>
+      <button class="btn-secondary btn-full" id="saveDeduction">控除額を保存</button>
+    </section>
+
+    <section class="section card">
+      <h2 class="section-title">表示モード</h2>
+      <div class="theme-toggle">
+        <button class="btn-secondary" id="themeDark">ダークモード</button>
+        <button class="btn-secondary" id="themeLight">ライトモード</button>
+      </div>
+    </section>
+  </div><!-- /#viewSettings -->
+
+  <!-- 年間グラフ画面 -->
+  <div class="view view-annual" id="viewAnnual">
+    <section class="section card">
+      <h2 class="section-title">年間グラフ</h2>
+      <div class="form-group">
+        <label class="form-label" for="annualYear">対象年</label>
+        <select id="annualYear" class="form-input"></select>
+      </div>
+      <div id="annualChart" class="annual-chart"></div>
+      <div class="chart-legend">
+        <span class="legend-item"><i class="legend-swatch ex"></i>税抜</span>
+        <span class="legend-item"><i class="legend-swatch inc"></i>税込</span>
+      </div>
+    </section>
+  </div><!-- /#viewAnnual -->
 
 </div><!-- /#app -->
 
@@ -252,6 +289,19 @@
     <div class="modal-actions">
       <button class="btn-secondary" id="saveConfirmCancel">キャンセル</button>
       <button class="btn-primary" id="saveConfirmOk">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- メニュー（ホーム/設定/年間グラフ） -->
+<div id="menuModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+  <div class="modal-overlay" id="menuOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="menuTitle">メニュー</h3>
+    <div class="menu-list">
+      <button class="btn-secondary btn-full" id="menuHome">ホーム</button>
+      <button class="btn-secondary btn-full" id="menuSettings">設定</button>
+      <button class="btn-secondary btn-full" id="menuAnnual">年間グラフ</button>
     </div>
   </div>
 </div>
