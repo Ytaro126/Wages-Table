@@ -242,6 +242,20 @@
   </div>
 </div>
 
+<!-- 保存確認モーダル -->
+<div id="saveConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
+  <div class="modal-overlay" id="saveConfirmOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="saveConfirmTitle">保存確認</h3>
+    <p class="section-note">以下の内容で保存してよろしいですか？</p>
+    <div id="saveConfirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="saveConfirmCancel">キャンセル</button>
+      <button class="btn-primary" id="saveConfirmOk">保存</button>
+    </div>
+  </div>
+</div>
+
 <script src="main.js"></script>
 </body>
 </html>

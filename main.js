@@ -560,6 +560,15 @@ function setupEvents() {
     });
   });
 
+  // ── 保存確認モーダル ──
+  ['saveConfirmCancel', 'saveConfirmOverlay'].forEach(id => {
+    document.getElementById(id).addEventListener('click', closeSaveConfirm);
+  });
+  document.getElementById('saveConfirmOk').addEventListener('click', () => {
+    closeSaveConfirm();
+    saveRecord();
+  });
+
   // ── ① モードラジオボタン ──
   document.querySelectorAll('input[name="mode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
@@ -593,7 +602,7 @@ function setupEvents() {
   });
 
   // ── 「この日に記録」ボタン ──
-  document.getElementById('saveRecord').addEventListener('click', saveRecord);
+  document.getElementById('saveRecord').addEventListener('click', openSaveConfirm);
 
   // ── ⑤ 前回値を使う ──
   document.getElementById('fillPrev').addEventListener('click', fillPrevRecord);
@@ -679,6 +688,57 @@ function saveRecord() {
   saveState();
   renderAll();
   showMessage('保存しました', 'success', 'formMessage');
+}
+
+/**
+ * 保存確認モーダルを開く
+ * 入力内容を見せて「保存」か「キャンセル」を選ばせる
+ */
+function openSaveConfirm() {
+  clearMessage('formMessage');
+
+  if (!state.selectedDate) {
+    showMessage('日付を選択してください', 'error', 'formMessage');
+    return;
+  }
+  const mode = getSelectedMode();
+  if (!mode) {
+    showMessage('計算モード（機能1 または 機能2）を選択してください', 'error', 'formMessage');
+    return;
+  }
+
+  const preview = {
+    date: state.selectedDate,
+    count: parseInputInt('inputCount'),
+    count170: parseInputInt('inputCount170'),
+    pickupCount: parseInputInt('inputPickup'),
+    otherIncome: parseInputInt('inputOther'),
+    mode,
+  };
+
+  const ex  = calcRecordTaxEx(preview);
+  const inc = calcRecordTaxIn(preview);
+
+  const row = (label, value) => `<div class="confirm-row">
+    <span class="confirm-label">${label}</span>
+    <span class="confirm-value">${value}</span>
+  </div>`;
+
+  document.getElementById('saveConfirmBody').innerHTML =
+    row('日付', preview.date) +
+    row('配達完了数', `${preview.count} 件`) +
+    row('夜間配達枠', `${preview.count170} 件`) +
+    row('集荷枠', `${preview.pickupCount} 件`) +
+    row('その他収入', yen(preview.otherIncome)) +
+    row('計算モード', mode === 'feature1' ? '機能1' : '機能2') +
+    row('合計（税抜）', yen(ex)) +
+    row('合計（税込）', yen(inc));
+
+  document.getElementById('saveConfirmModal').classList.remove('hidden');
+}
+
+function closeSaveConfirm() {
+  document.getElementById('saveConfirmModal').classList.add('hidden');
 }
 
 /**

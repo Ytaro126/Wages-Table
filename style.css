@@ -786,3 +786,22 @@ tr:last-child td { border-bottom: none; }
 .memo-label { color: var(--text-secondary); }
 .memo-value { font-weight: 600; font-variant-numeric: tabular-nums; }
 .memo-row--total .memo-value { color: var(--accent); font-size: 1.0625rem; }
+
+/* ── 保存確認モーダル ── */
+#saveConfirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 0.25rem;
+}
+.confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.9375rem;
+}
+.confirm-row:last-child { border-bottom: none; }
+.confirm-label { color: var(--text-secondary); }
+.confirm-value { font-weight: 600; font-variant-numeric: tabular-nums; }
