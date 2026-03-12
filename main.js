@@ -1,807 +1,812 @@
+/**
+ * ============================================================
+ * main.js — 配達記録アプリ v2
+ *
+ * 改善一覧:
+ *  ① 計算モードを日ごとにラジオ選択（グローバル排他廃止）
+ *  ② リアルタイム金額プレビュー
+ *  ③ カレンダーセルは税抜1行 + ドット（③⑦統合）
+ *  ④ 月合計に前月比表示
+ *  ⑤ 前回値クイック入力ボタン
+ *  ⑥ 削除ボタン2段階確認（誤削除防止）
+ *  ⑦ カレンダードットインジケーター（③に統合）
+ *  ⑧ CSVエクスポート
+ *  ⑨ ±ステッパーボタン
+ * ============================================================ */
+
+'use strict';
+
+/* ────────────────────────────────────────────────────────────
+   1. 定数・状態管理
+──────────────────────────────────────────────────────────── */
+
 const STORAGE_KEY = "delivery-wage-app-v1";
 
-/*
-  =======================================
-  初心者向け: JavaScriptの読み方(このファイル)
-  =======================================
-  1) state:
-     アプリの現在状態を入れるオブジェクト。
-     画面表示はこのstateを元に作られる。
-  2) render系関数:
-     stateを見てHTML表示を作る。
-  3) イベント系関数:
-     ボタンやタップの操作を受け取り、stateを更新する。
-  4) 計算系関数:
-     金額計算を1箇所に集約し、表示ブレを防ぐ。
-  5) 保存系関数:
-     localStorageに保存/復元して再起動後も維持する。
-*/
-
-// 画面全体で共有する状態。ここを更新して再描画する作り。
-const state = {
-  records: {},
-  feature1Enabled: true,
-  feature2Enabled: false,
+/**
+ * アプリの状態
+ *
+ * currentMode : 入力フォームで現在選択中のモード（'feature1'|'feature2'|null）
+ *               ① 旧: feature1Enabled/feature2Enabled（グローバル）→ 廃止
+ *               各レコードに mode を持つため、この値はフォームのUI状態のみ担う
+ */
+let state = {
+  records:           [],
+  currentMode:       null,       // ① フォームで選択中のモード
   monthlyDeductions: {},
-  selectedDate: "",
-  viewYear: 0,
-  viewMonth: 0
+  selectedDate:      null,
+  viewYear:          new Date().getFullYear(),
+  viewMonth:         new Date().getMonth(),
 };
 
-const dom = {};
-let swipeStartX = null;
-// スワイプ方向(前月/翌月)に応じてアニメーション方向を切り替えるためのフラグ
-let calendarAnimationDirection = 0;
-
-document.addEventListener("DOMContentLoaded", () => {
-  // 初回読み込み時の実行順:
-  // 1) 要素参照取得 2) 保存データ復元 3) イベント登録 4) 画面描画
-  cacheDom();
-  initState();
-  bindEvents();
-  renderAll();
-});
-
-function cacheDom() {
-  // 毎回getElementByIdしないように、最初に参照をまとめて保持する
-  dom.prevMonthBtn = document.getElementById("prevMonthBtn");
-  dom.nextMonthBtn = document.getElementById("nextMonthBtn");
-  dom.monthLabelBtn = document.getElementById("monthLabelBtn");
-  dom.weekHeader = document.getElementById("weekHeader");
-  dom.calendarGrid = document.getElementById("calendarGrid");
-  dom.calendarSwipeArea = document.getElementById("calendarSwipeArea");
-
-  dom.selectedDateText = document.getElementById("selectedDateText");
-  dom.countInput = document.getElementById("countInput");
-  dom.count170Input = document.getElementById("count170Input");
-  dom.pickupInput = document.getElementById("pickupInput");
-  dom.otherIncomeInput = document.getElementById("otherIncomeInput");
-  dom.feature1Check = document.getElementById("feature1Check");
-  dom.feature2Check = document.getElementById("feature2Check");
-  dom.recordBtn = document.getElementById("recordBtn");
-  dom.errorText = document.getElementById("errorText");
-
-  dom.deductionInput = document.getElementById("deductionInput");
-  dom.summaryGrid = document.getElementById("summaryGrid");
-  dom.recordsTbody = document.getElementById("recordsTbody");
-
-  dom.pickerModal = document.getElementById("pickerModal");
-  dom.pickerCloseBtn = document.getElementById("pickerCloseBtn");
-  dom.pickerApplyBtn = document.getElementById("pickerApplyBtn");
-  dom.pickerYear = document.getElementById("pickerYear");
-  dom.pickerMonth = document.getElementById("pickerMonth");
-  dom.pickerDay = document.getElementById("pickerDay");
-
-  dom.memoModal = document.getElementById("memoModal");
-  dom.memoCloseBtn = document.getElementById("memoCloseBtn");
-  dom.memoTitle = document.getElementById("memoTitle");
-  dom.memoBody = document.getElementById("memoBody");
-
-  dom.saveBtn = document.getElementById("saveBtn");
-}
-
-function initState() {
-  // デフォルトは今日。あとでlocalStorageの値で上書きされる。
-  const today = new Date();
-  state.selectedDate = toISODate(today.getFullYear(), today.getMonth(), today.getDate());
-  state.viewYear = today.getFullYear();
-  state.viewMonth = today.getMonth();
-
-  loadState();
-  ensureSelectedDateValid();
-  // 初回の入力欄に、選択日データ（なければ空欄）を反映
-  fillInputsFromRecord(state.selectedDate);
-}
-
-function bindEvents() {
-  // UI操作と関数を紐付ける
-  dom.prevMonthBtn.addEventListener("click", () => moveMonth(-1, true));
-  dom.nextMonthBtn.addEventListener("click", () => moveMonth(1, true));
-  dom.monthLabelBtn.addEventListener("click", openPickerModal);
-
-  dom.calendarSwipeArea.addEventListener("touchstart", onCalendarTouchStart, { passive: true });
-  dom.calendarSwipeArea.addEventListener("touchend", onCalendarTouchEnd, { passive: true });
-
-  dom.feature1Check.addEventListener("change", () => setFeatureSelection("feature1"));
-  dom.feature2Check.addEventListener("change", () => setFeatureSelection("feature2"));
-
-  dom.recordBtn.addEventListener("click", saveRecordForSelectedDate);
-  dom.deductionInput.addEventListener("change", updateMonthlyDeduction);
-  dom.saveBtn.addEventListener("click", onSaveButtonClick);
-
-  dom.recordsTbody.addEventListener("click", onTableClick);
-
-  dom.pickerCloseBtn.addEventListener("click", closePickerModal);
-  dom.pickerApplyBtn.addEventListener("click", applyPickerDate);
-  dom.pickerYear.addEventListener("change", updatePickerDayOptions);
-  dom.pickerMonth.addEventListener("change", updatePickerDayOptions);
-  // モーダル外側の暗い背景を押したら閉じる(初心者向けのよくあるUI)
-  dom.pickerModal.addEventListener("click", (event) => {
-    if (event.target === dom.pickerModal) closePickerModal();
-  });
-
-  dom.memoCloseBtn.addEventListener("click", closeMemoModal);
-  dom.memoModal.addEventListener("click", (event) => {
-    if (event.target === dom.memoModal) closeMemoModal();
-  });
-}
-
-function renderAll() {
-  // 複数箇所の表示をまとめて更新
-  renderWeekHeader();
-  renderMonthLabel();
-  renderSelectedDate();
-  renderFeatureChecks();
-  renderDeductionInput();
-  renderCalendar();
-  renderMonthlySummary();
-  renderTable();
-}
-
-function renderWeekHeader() {
-  // 曜日見出しは固定配列から生成
-  const labels = ["日", "月", "火", "水", "木", "金", "土"];
-  dom.weekHeader.innerHTML = labels.map((day) => `<div class="week-cell">${day}</div>`).join("");
-}
-
-function renderMonthLabel() {
-  // viewYear/viewMonth(0始まり)を見やすい文字に変換
-  dom.monthLabelBtn.textContent = `${state.viewYear}年 ${state.viewMonth + 1}月`;
-}
-
-function renderSelectedDate() {
-  // YYYY-MM-DDを「YYYY年M月D日」に変換して表示
-  dom.selectedDateText.textContent = formatDateJP(state.selectedDate);
-}
-
-function renderFeatureChecks() {
-  // stateとチェックボックスの見た目を同期
-  dom.feature1Check.checked = state.feature1Enabled;
-  dom.feature2Check.checked = state.feature2Enabled;
-}
-
-function renderDeductionInput() {
-  // 月キー(YYYY-MM)ごとに保持した控除額を入力欄に表示
-  const key = getMonthKey(state.viewYear, state.viewMonth);
-  dom.deductionInput.value = String(state.monthlyDeductions[key] || 0);
-}
-
-function renderCalendar() {
-  // カレンダー本体は毎回作り直して、状態と表示のズレを防ぐ
-  dom.calendarGrid.innerHTML = "";
-
-  // getDay(): 0=日 ... 6=土
-  const firstDay = new Date(state.viewYear, state.viewMonth, 1).getDay();
-  const daysInMonth = getDaysInMonth(state.viewYear, state.viewMonth);
-  // 週の途中で終わる月でも、最終行を7列で埋めるために切り上げ
-  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-
-  for (let i = 0; i < totalCells; i += 1) {
-    // iが0開始なので、月初の曜日(firstDay)を差し引いて実日付へ変換
-    const day = i - firstDay + 1;
-    const isCurrentMonth = day >= 1 && day <= daysInMonth;
-
-    const cell = document.createElement("button");
-    cell.type = "button";
-    cell.className = "day-cell";
-
-    if (!isCurrentMonth) {
-      // 月外セルは空表示
-      cell.classList.add("empty");
-      cell.disabled = true;
-      dom.calendarGrid.appendChild(cell);
-      continue;
-    }
-
-    // データキーは日付文字列(例: 2026-03-05)で統一
-    const iso = toISODate(state.viewYear, state.viewMonth, day);
-    const record = state.records[iso];
-
-    if (iso === state.selectedDate) {
-      cell.classList.add("selected");
-    }
-
-    const dayNum = document.createElement("div");
-    dayNum.className = "day-number";
-    dayNum.textContent = String(day);
-    cell.appendChild(dayNum);
-
-    if (record) {
-      // 金額タップでメモモーダルを開けるようボタン化
-      const amounts = calcRecordAmounts(record);
-      const amountBtn = document.createElement("button");
-      amountBtn.type = "button";
-      amountBtn.className = "amount-btn";
-      // innerHTMLを使う理由:
-      // 税抜/税込を改行して2段表示するため <br> が必要
-      amountBtn.innerHTML = `${formatYen(amounts.totalEx)}<br>(${formatYen(amounts.totalIn)})`;
-      amountBtn.addEventListener("click", (event) => {
-        // 親(day-cell)のクリックイベントへ伝播させない
-        // これがないと「メモを開く」と同時に「日付選択」も走ってしまう
-        event.stopPropagation();
-        openMemoModal(iso, record, amounts);
-      });
-      cell.appendChild(amountBtn);
-    }
-
-    cell.addEventListener("click", () => {
-      // 日付タップで選択日変更 + その日の入力値をフォームへ反映
-      state.selectedDate = iso;
-      fillInputsFromRecord(iso);
-      renderSelectedDate();
-      // selected枠の見た目を更新するため再描画
-      renderCalendar();
-      clearError();
-      saveState();
-    });
-
-    dom.calendarGrid.appendChild(cell);
-  }
-
-  runCalendarAnimation();
-}
-
-function renderMonthlySummary() {
-  // 表示中の月データだけ集計
-  const monthRecords = getRecordsForCurrentMonth();
-  const monthKey = getMonthKey(state.viewYear, state.viewMonth);
-  // Number()で数値化して計算時の型ブレを防止
-  const deduction = Number(state.monthlyDeductions[monthKey] || 0);
-
-  const totals = {
-    count: 0,
-    count170: 0,
-    pickup: 0,
-    otherIncome: 0,
-    feature1Ex: 0,
-    feature1In: 0,
-    feature2Ex: 0,
-    feature2In: 0,
-    totalEx: 0,
-    totalIn: 0
-  };
-
-  monthRecords.forEach((record) => {
-    // 1日単位計算を積み上げる
-    const amounts = calcRecordAmounts(record);
-    totals.count += record.count;
-    totals.count170 += record.count170;
-    totals.pickup += record.pickupCount;
-    totals.otherIncome += record.otherIncome || 0;
-    totals.feature1Ex += amounts.feature1Ex;
-    totals.feature1In += amounts.feature1In;
-    totals.feature2Ex += amounts.feature2Ex;
-    totals.feature2In += amounts.feature2In;
-    totals.totalEx += amounts.totalEx;
-    totals.totalIn += amounts.totalIn;
-  });
-
-  totals.totalEx -= deduction;
-  totals.totalIn -= deduction;
-  // 固定控除は税抜/税込の両方から同額で差し引く
-
-  dom.summaryGrid.innerHTML = "";
-
-  const rows = [
-    ["配達完了数合計", String(totals.count)],
-    ["170円枠合計", String(totals.count170)],
-    ["集荷枠合計", String(totals.pickup)],
-    ["その他収入合計", formatYen(totals.otherIncome)],
-    ["機能1合計", `${formatYen(totals.feature1Ex)} / ${formatYen(totals.feature1In)}`],
-    ["機能2合計", `${formatYen(totals.feature2Ex)} / ${formatYen(totals.feature2In)}`],
-    ["最終合計", `${formatYen(totals.totalEx)} / ${formatYen(totals.totalIn)}`],
-    ["月固定控除", formatYen(deduction)]
-  ];
-
-  rows.forEach(([label, value]) => {
-    const item = document.createElement("div");
-    item.className = "summary-item";
-    item.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
-    dom.summaryGrid.appendChild(item);
-  });
-}
-
-function renderTable() {
-  // 月内レコード一覧を表形式で表示
-  const monthRecords = getRecordsForCurrentMonth();
-  dom.recordsTbody.innerHTML = "";
-
-  if (monthRecords.length === 0) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = '<td colspan="9">記録がありません</td>';
-    dom.recordsTbody.appendChild(tr);
-    return;
-  }
-
-  monthRecords.forEach((record) => {
-    const amounts = calcRecordAmounts(record);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${record.date}</td>
-      <td>${record.count}</td>
-      <td>${record.count170}</td>
-      <td>${record.pickupCount}</td>
-      <td>${formatYen(record.otherIncome || 0)}</td>
-      <td>${record.mode === "feature1" ? `${formatYen(amounts.feature1Ex)}<br>(${formatYen(amounts.feature1In)})` : "-"}</td>
-      <td>${record.mode === "feature2" ? `${formatYen(amounts.feature2Ex)}<br>(${formatYen(amounts.feature2In)})` : "-"}</td>
-      <td>${formatYen(amounts.totalEx)}<br>(${formatYen(amounts.totalIn)})</td>
-      <!-- data-date:
-           削除ボタンが「どの日付を消すか」を持つための属性 -->
-      <td><button type="button" class="delete-btn" data-date="${record.date}">削除</button></td>
-    `;
-    dom.recordsTbody.appendChild(tr);
-  });
-}
-
-function setFeatureSelection(featureName) {
-  // 機能1/機能2は排他制御（同時ON不可）
-  if (featureName === "feature1") {
-    state.feature1Enabled = dom.feature1Check.checked;
-    if (state.feature1Enabled) state.feature2Enabled = false;
-  }
-
-  if (featureName === "feature2") {
-    state.feature2Enabled = dom.feature2Check.checked;
-    if (state.feature2Enabled) state.feature1Enabled = false;
-  }
-
-  renderFeatureChecks();
-  // トグル変更は即保存して、再読込でも同じ状態にする
-  saveState();
-}
-
-function saveRecordForSelectedDate() {
-  clearError();
-
-  // 両方OFFでは計算方法が決まらないため保存禁止
-  if (!state.feature1Enabled && !state.feature2Enabled) {
-    showError("機能1か機能2を選択してください。両方OFFでは記録できません。");
-    return;
-  }
-
-  // 空欄・負数・小数などを共通関数で安全な整数に丸める
-  const count = toNonNegativeInt(dom.countInput.value);
-  const count170 = toNonNegativeInt(dom.count170Input.value);
-  const pickupCount = toNonNegativeInt(dom.pickupInput.value);
-  const otherIncome = toNonNegativeInt(dom.otherIncomeInput.value);
-
-  // 排他制御済みなので、ON側をモードとして保存
-  const mode = state.feature1Enabled ? "feature1" : "feature2";
-
-  // 同じ日付は上書き保存
-  state.records[state.selectedDate] = {
-    date: state.selectedDate,
-    count,
-    count170,
-    pickupCount,
-    otherIncome,
-    mode
-  };
-
-  saveState();
-  renderCalendar();
-  renderMonthlySummary();
-  renderTable();
-}
-
-function fillInputsFromRecord(isoDate) {
-  // レコード未登録日は空欄表示（入力開始しやすくする）
-  const record = state.records[isoDate];
-  if (!record) {
-    dom.countInput.value = "";
-    dom.count170Input.value = "";
-    dom.pickupInput.value = "";
-    dom.otherIncomeInput.value = "";
-    return;
-  }
-
-  // String()で必ずinputに表示できる文字列へ変換
-  dom.countInput.value = String(record.count);
-  dom.count170Input.value = String(record.count170);
-  dom.pickupInput.value = String(record.pickupCount);
-  dom.otherIncomeInput.value = String(record.otherIncome || 0);
-}
-
-function onTableClick(event) {
-  // tbodyに1つだけclickを置く「イベント委譲」。
-  // 行が増減しても個別にaddEventListenerしなくて済む。
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-
-  if (!target.classList.contains("delete-btn")) return;
-  const date = target.getAttribute("data-date");
-  if (!date) return;
-
-  // オブジェクトの該当キーを削除
-  delete state.records[date];
-  saveState();
-  renderCalendar();
-  renderMonthlySummary();
-  renderTable();
-}
-
-function updateMonthlyDeduction() {
-  // 「YYYY-MM」をキーにして月ごとに控除額を保持
-  const value = toNonNegativeInt(dom.deductionInput.value);
-  const key = getMonthKey(state.viewYear, state.viewMonth);
-  // 例: monthlyDeductions["2026-03"] = 5000
-  state.monthlyDeductions[key] = value;
-  dom.deductionInput.value = String(value);
-
-  saveState();
-  renderCalendar();
-  renderMonthlySummary();
-  renderTable();
-}
-
-function onSaveButtonClick() {
-  // 明示保存ボタン。入力中でなくても現在状態を確実に保存できる。
-  saveState();
-  dom.errorText.style.color = "#11602d";
-  dom.errorText.textContent = "保存しました。";
-  // 一定時間後にメッセージを消して見た目を戻す
-  window.setTimeout(() => {
-    clearError();
-  }, 1500);
-}
-
-function moveMonth(delta, animate = false) {
-  // delta: -1=前月, +1=翌月
-  if (animate) {
-    calendarAnimationDirection = delta;
-  }
-
-  // Dateの月は範囲外を自動補正する。
-  // 例: month=12なら翌年1月になる。
-  const next = new Date(state.viewYear, state.viewMonth + delta, 1);
-  state.viewYear = next.getFullYear();
-  state.viewMonth = next.getMonth();
-
-  const daysInMonth = getDaysInMonth(state.viewYear, state.viewMonth);
-  const selected = parseISODate(state.selectedDate);
-  // 31日->30日など月日数差で日付が壊れないよう補正
-  const newDay = Math.min(selected.day, daysInMonth);
-  state.selectedDate = toISODate(state.viewYear, state.viewMonth, newDay);
-
-  fillInputsFromRecord(state.selectedDate);
-  saveState();
-  renderAll();
-}
-
-function onCalendarTouchStart(event) {
-  // スワイプ開始位置を保持
-  if (event.changedTouches.length === 0) return;
-  // changedTouches[0].clientX = 指のX座標
-  swipeStartX = event.changedTouches[0].clientX;
-}
-
-function onCalendarTouchEnd(event) {
-  // 終了位置との差分で左右スワイプ判定
-  if (swipeStartX === null || event.changedTouches.length === 0) return;
-  const endX = event.changedTouches[0].clientX;
-  // diff < 0 なら左方向スワイプ、diff > 0 なら右方向
-  const diff = endX - swipeStartX;
-  swipeStartX = null;
-
-  if (Math.abs(diff) < 2.5 * 16) return;
-  // 意図しない小さな指移動は無視
-
-  if (diff < 0) {
-    moveMonth(1, true);
-  } else {
-    moveMonth(-1, true);
-  }
-}
-
-function openPickerModal() {
-  // 開く直前に選択肢を作ることで最新状態と同期
-  populatePickerOptions();
-  dom.pickerModal.classList.add("show");
-  dom.pickerModal.setAttribute("aria-hidden", "false");
-}
-
-function closePickerModal() {
-  dom.pickerModal.classList.remove("show");
-  dom.pickerModal.setAttribute("aria-hidden", "true");
-}
-
-function populatePickerOptions() {
-  // 年は要件どおり2025〜2030固定
-  const selected = parseISODate(state.selectedDate);
-
-  dom.pickerYear.innerHTML = "";
-  // 年の選択肢を動的生成(要件固定)
-  for (let year = 2025; year <= 2030; year += 1) {
-    const option = document.createElement("option");
-    option.value = String(year);
-    option.textContent = `${year}年`;
-    if (year === selected.year) option.selected = true;
-    dom.pickerYear.appendChild(option);
-  }
-
-  dom.pickerMonth.innerHTML = "";
-  // 月の選択肢を1〜12で生成
-  for (let month = 1; month <= 12; month += 1) {
-    const option = document.createElement("option");
-    option.value = String(month);
-    option.textContent = `${month}月`;
-    if (month === selected.month + 1) option.selected = true;
-    dom.pickerMonth.appendChild(option);
-  }
-
-  updatePickerDayOptions(selected.day);
-}
-
-function updatePickerDayOptions(preferredDay) {
-  // 月変更時、存在しない日付（例: 31日）を自動補正
-  const year = Number(dom.pickerYear.value);
-  const monthIndex = Number(dom.pickerMonth.value) - 1;
-  const days = getDaysInMonth(year, monthIndex);
-
-  const current = preferredDay || Number(dom.pickerDay.value) || 1;
-  // 2月など日数が少ない月に切り替えた時の補正
-  const safeDay = Math.min(current, days);
-
-  dom.pickerDay.innerHTML = "";
-  for (let day = 1; day <= days; day += 1) {
-    const option = document.createElement("option");
-    option.value = String(day);
-    option.textContent = `${day}日`;
-    if (day === safeDay) option.selected = true;
-    dom.pickerDay.appendChild(option);
-  }
-}
-
-function applyPickerDate() {
-  // ピッカーで選んだ年月日を、表示月と選択日に反映
-  const year = Number(dom.pickerYear.value);
-  const monthIndex = Number(dom.pickerMonth.value) - 1;
-  const day = Number(dom.pickerDay.value);
-
-  state.viewYear = year;
-  // 表示月と選択日を同時に更新する
-  state.viewMonth = monthIndex;
-  state.selectedDate = toISODate(year, monthIndex, day);
-
-  fillInputsFromRecord(state.selectedDate);
-  closePickerModal();
-  saveState();
-  renderAll();
-}
-
-function openMemoModal(isoDate, record, amounts) {
-  // 日別詳細（入力値と計算結果）を確認する読み取り用モーダル
-  dom.memoTitle.textContent = `${formatDateJP(isoDate)} のメモ`;
-  // 内訳を一覧表示。編集ではなく確認用途のモーダル。
-  dom.memoBody.innerHTML = `
-    <div>配達完了数: ${record.count}</div>
-    <div>170円配達枠: ${record.count170}</div>
-    <div>集荷枠: ${record.pickupCount}</div>
-    <div>その他収入: ${formatYen(record.otherIncome || 0)}</div>
-    <div>計算モード: ${record.mode === "feature1" ? "機能1" : "機能2"}</div>
-    <div>税抜: ${formatYen(amounts.totalEx)}</div>
-    <div>税込: ${formatYen(amounts.totalIn)}</div>
-  `;
-  dom.memoModal.classList.add("show");
-  dom.memoModal.setAttribute("aria-hidden", "false");
-}
-
-function closeMemoModal() {
-  dom.memoModal.classList.remove("show");
-  dom.memoModal.setAttribute("aria-hidden", "true");
-}
-
-function calcRecordAmounts(record) {
-  // 1日分の金額計算を一箇所に集約（表示と集計で共通利用）
-  // modeによって機能1/機能2のどちらを採用するか切り替える。
-  const feature1Ex = record.mode === "feature1" ? calcFeature1Ex(record.count) : 0;
-  const feature1In = record.mode === "feature1" ? addTax(feature1Ex) : 0;
-
-  const feature2Ex = record.mode === "feature2" ? record.count * 150 : 0;
-  const feature2In = record.mode === "feature2" ? record.count * 165 : 0;
-
-  const amount170Ex = record.count170 * 170;
-  const amount170In = record.count170 * 187;
-
-  // 集荷は税抜/税込共通で1件90円
-  const pickup = record.pickupCount * 90;
-  const otherIncome = toNonNegativeInt(record.otherIncome);
-  // その他収入は税抜/税込とも同額として加算
-
-  const totalEx = feature1Ex + feature2Ex + amount170Ex + pickup + otherIncome;
-  const totalIn = feature1In + feature2In + amount170In + pickup + otherIncome;
-
-  return {
-    feature1Ex,
-    feature1In,
-    feature2Ex,
-    feature2In,
-    totalEx,
-    totalIn
-  };
-}
-
-function calcFeature1Ex(count) {
-  // 機能1ルール: 80以下=14000, 81以上は超過1件ごと+110
+/* ────────────────────────────────────────────────────────────
+   2. 計算系関数
+──────────────────────────────────────────────────────────── */
+
+/** 機能1 金額（税抜 = 税込） */
+function calcFeature1(count) {
   if (count <= 80) return 14000;
   return 14000 + (count - 80) * 110;
 }
 
-function addTax(value) {
-  // 税込は10%加算（端数は四捨五入）
-  return Math.round(value * 1.1);
+/** レコードの税抜合計 */
+function calcRecordTaxEx(rec) {
+  let base = 0;
+  if (rec.mode === 'feature1') base = calcFeature1(rec.count);
+  else if (rec.mode === 'feature2') base = rec.count * 150;
+
+  return base + rec.count170 * 170 + rec.pickupCount * 90 + rec.otherIncome;
 }
 
-function getRecordsForCurrentMonth() {
-  // 表示中月のデータだけ抽出
-  const prefix = `${state.viewYear}-${pad2(state.viewMonth + 1)}`;
-  return Object.values(state.records)
-    // 先頭一致で月を絞る(例: "2026-03")
-    .filter((record) => record.date.startsWith(prefix))
-    // 日付昇順に並べる
-    .sort((a, b) => a.date.localeCompare(b.date));
+/** レコードの税込合計 */
+function calcRecordTaxIn(rec) {
+  let base = 0;
+  if (rec.mode === 'feature1') base = calcFeature1(rec.count);
+  else if (rec.mode === 'feature2') base = rec.count * 165;
+
+  return base + rec.count170 * 187 + rec.pickupCount * 90 + rec.otherIncome;
 }
 
-function ensureSelectedDateValid() {
-  // 破損データ対策。読み込み値が不正なら「今日」に戻す。
-  const parsed = parseISODate(state.selectedDate);
-  if (Number.isNaN(parsed.year) || Number.isNaN(parsed.month) || Number.isNaN(parsed.day)) {
-    const now = new Date();
-    state.selectedDate = toISODate(now.getFullYear(), now.getMonth(), now.getDate());
-  }
+/** 指定年月のレコード配列を返す */
+function getMonthRecords(year, month) {
+  const prefix = toMonthKey(year, month);
+  return state.records.filter(r => r.date.startsWith(prefix));
+}
 
-  if (typeof state.viewYear !== "number" || typeof state.viewMonth !== "number") {
-    const now = new Date();
-    state.viewYear = now.getFullYear();
-    state.viewMonth = now.getMonth();
-  }
+/**
+ * 指定年月の合計を計算して返す
+ * ④ 前月比の計算でも使うため、前月も同じ関数で計算する
+ */
+function calcMonthlyTotals(year, month) {
+  const recs = getMonthRecords(year, month);
+  let totalCount = 0, total170 = 0, totalPickup = 0, totalOther = 0;
+  let totalF1 = 0, totalF2Ex = 0, totalF2In = 0;
+  let totalEx = 0, totalIn = 0;
+
+  recs.forEach(r => {
+    totalCount  += r.count;
+    total170    += r.count170;
+    totalPickup += r.pickupCount;
+    totalOther  += r.otherIncome;
+    if (r.mode === 'feature1') { const f = calcFeature1(r.count); totalF1 += f; }
+    else if (r.mode === 'feature2') { totalF2Ex += r.count * 150; totalF2In += r.count * 165; }
+    totalEx += calcRecordTaxEx(r);
+    totalIn += calcRecordTaxIn(r);
+  });
+
+  const deduction = state.monthlyDeductions[toMonthKey(year, month)] || 0;
+  return {
+    totalCount, total170, totalPickup, totalOther,
+    totalF1, totalF2Ex, totalF2In,
+    totalEx, totalIn,
+    deduction,
+    finalEx: totalEx - deduction,
+    finalIn: totalIn - deduction,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────
+   3. 保存・読み込み系
+──────────────────────────────────────────────────────────── */
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.warn('保存失敗:', e); }
 }
 
 function loadState() {
-  // localStorage -> stateへ復元
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
-
   try {
-    // JSON文字列をオブジェクトへ戻す
-    const data = JSON.parse(raw);
-    state.records = sanitizeRecords(data.records);
-    state.feature1Enabled = Boolean(data.feature1Enabled);
-    state.feature2Enabled = Boolean(data.feature2Enabled);
-    state.monthlyDeductions = sanitizeDeductions(data.monthlyDeductions);
+    const saved = JSON.parse(raw);
+    state = { ...state, ...saved };
 
-    if (typeof data.selectedDate === "string") state.selectedDate = data.selectedDate;
-    if (typeof data.viewYear === "number") state.viewYear = data.viewYear;
-    if (typeof data.viewMonth === "number") state.viewMonth = data.viewMonth;
-  } catch (error) {
-    console.error("Failed to parse saved data", error);
+    // ① 旧バージョンとの互換性: feature1Enabled/feature2Enabled → currentMode に移行
+    if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
+    else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
+    // 旧キーは使わない（saveState で上書きされる）
+  } catch (e) {
+    console.error('データ読み込み失敗:', e);
   }
 }
 
-function saveState() {
-  // state -> localStorageへ保存
-  const payload = {
-    records: Object.values(state.records).map((record) => ({
-      date: record.date,
-      count: record.count,
-      count170: record.count170,
-      pickupCount: record.pickupCount,
-      otherIncome: record.otherIncome || 0,
-      mode: record.mode
-    })),
-    feature1Enabled: state.feature1Enabled,
-    feature2Enabled: state.feature2Enabled,
-    monthlyDeductions: state.monthlyDeductions,
-    selectedDate: state.selectedDate,
-    viewYear: state.viewYear,
-    viewMonth: state.viewMonth
+/* ────────────────────────────────────────────────────────────
+   4. 描画系関数
+──────────────────────────────────────────────────────────── */
+
+/**
+ * カレンダーを描画する
+ * ③ セルは「税抜金額のみ1行」に整理
+ * ⑦ 記録ありの日にドットインジケーターを表示
+ */
+function renderCalendar() {
+  const { viewYear, viewMonth, selectedDate } = state;
+  document.getElementById('monthTitle').textContent = `${viewYear}年${viewMonth + 1}月`;
+
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+  const lastDate        = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  // 空白セル
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'cal-cell cal-blank';
+    grid.appendChild(blank);
+  }
+
+  // 日付セル
+  for (let d = 1; d <= lastDate; d++) {
+    const dateStr = toDateStr(viewYear, viewMonth, d);
+    const rec     = state.records.find(r => r.date === dateStr);
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    if (dateStr === selectedDate) cell.classList.add('selected');
+
+    // 日付番号
+    const dayNum = document.createElement('span');
+    dayNum.className   = 'cal-day-num';
+    dayNum.textContent = d;
+    cell.appendChild(dayNum);
+
+    if (rec) {
+      // ⑦ ドットインジケーター
+      const dot = document.createElement('span');
+      dot.className = 'cal-dot';
+      cell.appendChild(dot);
+
+      // ③ 税抜金額のみ1行表示（税込はモーダルへ）
+      const ex         = calcRecordTaxEx(rec);
+      const amountDiv  = document.createElement('div');
+      amountDiv.className = 'cal-amount';
+
+      const exSpan = document.createElement('span');
+      exSpan.className   = 'cal-tax-ex';
+      exSpan.textContent = yen(ex);
+      amountDiv.appendChild(exSpan);
+
+      // 金額タップ → 詳細モーダル（セルタップと分離）
+      amountDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showMemoModal(rec);
+      });
+      cell.appendChild(amountDiv);
+    }
+
+    // セルタップ → 日付選択
+    cell.addEventListener('click', () => {
+      state.selectedDate = dateStr;
+      saveState();
+      renderCalendar();
+      syncFormFromSelectedDate();
+    });
+
+    grid.appendChild(cell);
+  }
+}
+
+/**
+ * 選択日のレコードをフォームに反映する
+ * ① レコードのモードをラジオボタンに反映
+ * ② プレビューも更新する
+ */
+function syncFormFromSelectedDate() {
+  const { selectedDate } = state;
+  document.getElementById('selectedDateDisplay').value = selectedDate || '';
+
+  const rec = selectedDate ? state.records.find(r => r.date === selectedDate) : null;
+
+  document.getElementById('inputCount').value    = rec ? rec.count       : '';
+  document.getElementById('inputCount170').value = rec ? rec.count170    : '';
+  document.getElementById('inputPickup').value   = rec ? rec.pickupCount : '';
+  document.getElementById('inputOther').value    = rec ? rec.otherIncome : '';
+
+  // ① レコードのモードがあればラジオに反映、なければ currentMode を保持
+  if (rec) {
+    state.currentMode = rec.mode;
+    saveState();
+  }
+  renderModeRadio();
+  updatePreview(); // ② プレビュー更新
+}
+
+/**
+ * ① ラジオボタンを state.currentMode に合わせて更新する
+ */
+function renderModeRadio() {
+  const r1 = document.getElementById('modeFeature1');
+  const r2 = document.getElementById('modeFeature2');
+  if (r1) r1.checked = state.currentMode === 'feature1';
+  if (r2) r2.checked = state.currentMode === 'feature2';
+}
+
+/**
+ * ② リアルタイムプレビューを更新する
+ * モードと入力値から予想金額を計算して表示
+ */
+function updatePreview() {
+  const previewEl = document.getElementById('calcPreview');
+  const mode = getSelectedMode();
+
+  if (!mode) {
+    previewEl.innerHTML = '';
+    return;
+  }
+
+  const mockRec = {
+    count:       parseInputInt('inputCount'),
+    count170:    parseInputInt('inputCount170'),
+    pickupCount: parseInputInt('inputPickup'),
+    otherIncome: parseInputInt('inputOther'),
+    mode,
   };
 
-  // localStorageは文字列しか保存できないためJSON文字列化して保存
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  const ex  = calcRecordTaxEx(mockRec);
+  const inc = calcRecordTaxIn(mockRec);
+
+  previewEl.innerHTML =
+    `<span class="preview-label">本日の予想合計</span>` +
+    `<span class="preview-ex">${yen(ex)}</span>` +
+    `<span class="preview-sep">/</span>` +
+    `<span class="preview-in">(${yen(inc)})</span>`;
 }
 
-function sanitizeRecords(records) {
-  // 壊れたデータが混じっても、最低限使える形に正規化
-  const map = {};
-  if (!Array.isArray(records)) return map;
+/**
+ * 月合計を描画する
+ * ④ 前月比を追加表示
+ */
+function renderMonthlyTotals() {
+  const { viewYear, viewMonth } = state;
+  const t = calcMonthlyTotals(viewYear, viewMonth);
 
-  records.forEach((item) => {
-    if (!item || typeof item.date !== "string") return;
-    // 古い保存データに項目不足があっても0補完で読めるようにする
-    map[item.date] = {
-      date: item.date,
-      count: toNonNegativeInt(item.count),
-      count170: toNonNegativeInt(item.count170),
-      pickupCount: toNonNegativeInt(item.pickupCount),
-      otherIncome: toNonNegativeInt(item.otherIncome),
-      mode: item.mode === "feature2" ? "feature2" : "feature1"
-    };
-  });
+  // ④ 前月を計算
+  const prevMonth = viewMonth === 0 ? 11 : viewMonth - 1;
+  const prevYear  = viewMonth === 0 ? viewYear - 1 : viewYear;
+  const pt = calcMonthlyTotals(prevYear, prevMonth);
+  const diffEx = t.finalEx - pt.finalEx;
+  const diffIn = t.finalIn - pt.finalIn;
 
-  return map;
-}
+  // 前月比の表示用ヘルパー
+  const compareClass = (diff) => diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+  const compareSign  = (diff) => diff > 0 ? '+' : '';
+  const compareArrow = (diff) => diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
 
-function sanitizeDeductions(deductions) {
-  // 控除額を数値化し、負数や不正値を防ぐ
-  const safe = {};
-  if (!deductions || typeof deductions !== "object") return safe;
-
-  Object.keys(deductions).forEach((key) => {
-    safe[key] = toNonNegativeInt(deductions[key]);
-  });
-
-  return safe;
-}
-
-function showError(message) {
-  // エラーは赤で表示
-  dom.errorText.style.color = "#b00020";
-  dom.errorText.textContent = message;
-}
-
-function clearError() {
-  dom.errorText.textContent = "";
-}
-
-function toNonNegativeInt(value) {
-  // 未入力や負数を0へ丸める共通関数
-  const n = Number(value);
-  if (Number.isNaN(n) || n < 0) return 0;
-  return Math.floor(n);
-}
-
-function pad2(num) {
-  // 1桁を2桁へ(例: 3 => "03")
-  return String(num).padStart(2, "0");
-}
-
-function toISODate(year, monthIndex, day) {
-  // monthIndexは0始まりなので +1 して文字列化
-  return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
-}
-
-function parseISODate(isoDate) {
-  // "YYYY-MM-DD" を { year, month, day }へ分解
-  const [yearText, monthText, dayText] = String(isoDate).split("-");
-  return {
-    year: Number(yearText),
-    month: Number(monthText) - 1,
-    day: Number(dayText)
+  // 行ヘルパー
+  const row = (label, value, mod = '') => {
+    const cls = mod ? `total-row total-row--${mod}` : 'total-row';
+    return `<div class="${cls}">
+      <span class="total-label">${label}</span>
+      <span class="total-value">${value}</span>
+    </div>`;
   };
+
+  const container = document.getElementById('monthlyTotals');
+  container.innerHTML =
+    row('配達完了数',         `${t.totalCount} 件`) +
+    row('170円枠',            `${t.total170} 件`) +
+    row('集荷枠',             `${t.totalPickup} 件`) +
+    row('その他収入',         yen(t.totalOther)) +
+    `<div class="total-divider"></div>` +
+    row('機能1 合計',         yen(t.totalF1)) +
+    row('機能2 合計',         `${yen(t.totalF2Ex)} / (${yen(t.totalF2In)})`) +
+    `<div class="total-divider"></div>` +
+    row('小計（税抜 / 税込）',`${yen(t.totalEx)} / (${yen(t.totalIn)})`) +
+    row('固定控除',           `－${yen(t.deduction)}`) +
+    `<div class="total-divider"></div>` +
+    row('最終合計（税抜）',   yen(t.finalEx), 'final') +
+    row('最終合計（税込）',   yen(t.finalIn), 'final') +
+    // ④ 前月比
+    `<div class="total-row total-row--compare">
+      <span class="total-label">前月比（税抜 / 税込）</span>
+      <span class="compare-value ${compareClass(diffEx)}">
+        ${compareSign(diffEx)}${yen(diffEx)} ${compareArrow(diffEx)}
+        &nbsp;/&nbsp;
+        ${compareSign(diffIn)}${yen(diffIn)} ${compareArrow(diffIn)}
+      </span>
+    </div>`;
 }
 
-function formatDateJP(isoDate) {
-  const p = parseISODate(isoDate);
-  return `${p.year}年${p.month + 1}月${p.day}日`;
+/**
+ * 記録一覧テーブルを描画する
+ * ⑥ 削除ボタンは2段階確認（1回目→確認状態、2回目→実行）
+ */
+function renderTable() {
+  const recs = getMonthRecords(state.viewYear, state.viewMonth);
+  const tbody = document.getElementById('recordsBody');
+  tbody.innerHTML = '';
+
+  if (recs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="table-empty">記録がありません</td></tr>';
+    return;
+  }
+
+  recs.sort((a, b) => a.date.localeCompare(b.date));
+
+  recs.forEach(rec => {
+    const ex  = calcRecordTaxEx(rec);
+    const inc = calcRecordTaxIn(rec);
+    const f1  = rec.mode === 'feature1' ? yen(calcFeature1(rec.count)) : '—';
+    const f2  = rec.mode === 'feature2' ? yen(rec.count * 150)         : '—';
+
+    const tr = document.createElement('tr');
+
+    // データセル
+    const dataCells = [
+      rec.date.slice(5).replace('-', '/'),
+      rec.count,
+      rec.count170,
+      rec.pickupCount,
+      yen(rec.otherIncome),
+      f1, f2,
+      yen(ex),
+      yen(inc),
+    ];
+    dataCells.forEach(val => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+
+    // ⑥ 削除ボタン（2段階確認）
+    const deleteTd  = document.createElement('td');
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-delete';
+    deleteBtn.textContent = '✕';
+    deleteBtn.setAttribute('aria-label', `${rec.date}を削除`);
+
+    let armed    = false;
+    let armTimer = null;
+
+    deleteBtn.addEventListener('click', () => {
+      if (armed) {
+        // 2回目タップ: 削除実行
+        clearTimeout(armTimer);
+        state.records = state.records.filter(r => r.date !== rec.date);
+        if (state.selectedDate === rec.date) state.selectedDate = null;
+        saveState();
+        renderAll();
+      } else {
+        // 1回目タップ: 確認状態へ
+        armed = true;
+        deleteBtn.textContent = '確認';
+        deleteBtn.classList.add('btn-delete--armed');
+        // 3秒後に自動リセット
+        armTimer = setTimeout(() => {
+          armed = false;
+          deleteBtn.textContent = '✕';
+          deleteBtn.classList.remove('btn-delete--armed');
+        }, 3000);
+      }
+    });
+
+    deleteTd.appendChild(deleteBtn);
+    tr.appendChild(deleteTd);
+    tbody.appendChild(tr);
+  });
 }
 
-function getMonthKey(year, monthIndex) {
-  // 月単位保存キー: YYYY-MM
-  return `${year}-${pad2(monthIndex + 1)}`;
+/** 控除額入力欄を表示月のデータで更新 */
+function renderDeductionInput() {
+  const val = state.monthlyDeductions[toMonthKey(state.viewYear, state.viewMonth)];
+  document.getElementById('inputDeduction').value = val !== undefined ? val : '';
 }
 
-function getDaysInMonth(year, monthIndex) {
-  // 翌月0日=今月末日 を使う定番テクニック
-  return new Date(year, monthIndex + 1, 0).getDate();
+/** 全体を再描画する */
+function renderAll() {
+  renderCalendar();
+  renderMonthlyTotals();
+  renderTable();
+  renderModeRadio();
+  renderDeductionInput();
+  syncFormFromSelectedDate(); // ← 内部で updatePreview も呼ばれる
 }
 
-function formatYen(value) {
-  // 3桁区切り付きの円表記に統一
-  return `¥${Number(value).toLocaleString("ja-JP")}`;
+/* ────────────────────────────────────────────────────────────
+   5. モーダル制御
+──────────────────────────────────────────────────────────── */
+
+/** 日別詳細モーダルを表示する（税込も含む全情報） */
+function showMemoModal(rec) {
+  const ex  = calcRecordTaxEx(rec);
+  const inc = calcRecordTaxIn(rec);
+
+  document.getElementById('memoTitle').textContent = `${rec.date} の記録`;
+
+  const memoRow = (label, value, mod = '') => {
+    const cls = mod ? `memo-row memo-row--${mod}` : 'memo-row';
+    return `<div class="${cls}">
+      <span class="memo-label">${label}</span>
+      <span class="memo-value">${value}</span>
+    </div>`;
+  };
+
+  document.getElementById('memoBody').innerHTML =
+    memoRow('配達完了数',   `${rec.count} 件`) +
+    memoRow('170円配達枠', `${rec.count170} 件`) +
+    memoRow('集荷枠',       `${rec.pickupCount} 件`) +
+    memoRow('その他収入',   yen(rec.otherIncome)) +
+    memoRow('計算モード',   rec.mode === 'feature1' ? '機能1' : '機能2') +
+    memoRow('合計（税抜）', yen(ex),  'total') +
+    memoRow('合計（税込）', yen(inc), 'total');
+
+  document.getElementById('memoModal').classList.remove('hidden');
 }
 
-function runCalendarAnimation() {
-  // 月移動時のみ、方向に応じた短いアニメーションを実行
-  if (!calendarAnimationDirection) return;
+/** 年月ピッカーを表示する */
+function showPickerModal() {
+  const yearSel  = document.getElementById('pickerYear');
+  const monthSel = document.getElementById('pickerMonth');
 
-  const className = calendarAnimationDirection > 0 ? "slide-next" : "slide-prev";
-  dom.calendarGrid.classList.remove("slide-next", "slide-prev");
-  // 再描画を強制してアニメーションを再実行可能にする
-  void dom.calendarGrid.offsetWidth;
-  dom.calendarGrid.classList.add(className);
-  dom.calendarGrid.addEventListener("animationend", () => {
-    dom.calendarGrid.classList.remove("slide-next", "slide-prev");
-  }, { once: true });
-  calendarAnimationDirection = 0;
+  yearSel.innerHTML = '';
+  for (let y = 2025; y <= 2030; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = `${y}年`;
+    if (y === state.viewYear) opt.selected = true;
+    yearSel.appendChild(opt);
+  }
+
+  monthSel.innerHTML = '';
+  for (let m = 0; m < 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = `${m + 1}月`;
+    if (m === state.viewMonth) opt.selected = true;
+    monthSel.appendChild(opt);
+  }
+
+  document.getElementById('pickerModal').classList.remove('hidden');
 }
+
+/* ────────────────────────────────────────────────────────────
+   6. イベント登録
+──────────────────────────────────────────────────────────── */
+
+function setupEvents() {
+
+  // ── 月切り替え ──
+  document.getElementById('prevMonth').addEventListener('click', () => goMonth(-1));
+  document.getElementById('nextMonth').addEventListener('click', () => goMonth(1));
+  document.getElementById('monthTitle').addEventListener('click', showPickerModal);
+
+  // ── ピッカー ──
+  document.getElementById('pickerConfirm').addEventListener('click', () => {
+    state.viewYear  = parseInt(document.getElementById('pickerYear').value,  10);
+    state.viewMonth = parseInt(document.getElementById('pickerMonth').value, 10);
+    saveState();
+    renderAll();
+    document.getElementById('pickerModal').classList.add('hidden');
+  });
+  ['pickerCancel', 'pickerOverlay'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => {
+      document.getElementById('pickerModal').classList.add('hidden');
+    });
+  });
+
+  // ── メモモーダル閉じる ──
+  ['memoClose', 'memoOverlay'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => {
+      document.getElementById('memoModal').classList.add('hidden');
+    });
+  });
+
+  // ── ① モードラジオボタン ──
+  document.querySelectorAll('input[name="mode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      state.currentMode = e.target.value;
+      saveState();
+      updatePreview(); // ② プレビュー即時更新
+    });
+  });
+
+  // ── ② プレビュー: テキスト入力のたびに更新 ──
+  ['inputCount', 'inputCount170', 'inputPickup', 'inputOther'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updatePreview);
+  });
+
+  // ── ⑨ ステッパーボタン（formSection 内の全ボタンにまとめて対応）──
+  document.getElementById('formSection').addEventListener('click', handleStepperClick);
+  // 控除額のステッパーは formSection の外なので別途登録
+  document.querySelector('#formSection ~ .section .stepper-wrap') &&
+    document.querySelectorAll('.stepper-btn').forEach(btn => {
+      if (!btn.closest('#formSection')) {
+        btn.addEventListener('click', handleStepperClick);
+      }
+    });
+
+  // ── ⑨ 控除額セクションのステッパーもまとめて処理 ──
+  document.querySelectorAll('.stepper-btn').forEach(btn => {
+    if (!btn.closest('#formSection')) {
+      btn.addEventListener('click', handleStepperClick);
+    }
+  });
+
+  // ── 「この日に記録」ボタン ──
+  document.getElementById('saveRecord').addEventListener('click', saveRecord);
+
+  // ── ⑤ 前回値を使う ──
+  document.getElementById('fillPrev').addEventListener('click', fillPrevRecord);
+
+  // ── 控除額保存 ──
+  document.getElementById('saveDeduction').addEventListener('click', () => {
+    const monthKey = toMonthKey(state.viewYear, state.viewMonth);
+    state.monthlyDeductions[monthKey] = parseInputInt('inputDeduction');
+    saveState();
+    renderMonthlyTotals();
+    showMessage('控除額を保存しました', 'success', 'formMessage');
+  });
+
+  // ── ⑧ CSVエクスポート ──
+  document.getElementById('exportCsv').addEventListener('click', exportCSV);
+
+  // ── カレンダースワイプ ──
+  setupSwipe();
+}
+
+/**
+ * ⑨ ステッパーボタンのクリック処理（共通ハンドラ）
+ * data-target に input の id、data-delta に変化量を指定
+ */
+function handleStepperClick(e) {
+  const btn = e.target.closest('.stepper-btn');
+  if (!btn) return;
+
+  const targetId = btn.dataset.target;
+  const delta    = parseInt(btn.dataset.delta, 10);
+  if (!targetId || isNaN(delta)) return;
+
+  const input   = document.getElementById(targetId);
+  if (!input)   return;
+
+  const current = parseInt(input.value, 10) || 0;
+  const newVal  = Math.max(0, current + delta);
+  input.value   = newVal;
+
+  // 配達関連の入力なら即プレビュー更新
+  if (['inputCount', 'inputCount170', 'inputPickup', 'inputOther'].includes(targetId)) {
+    updatePreview();
+  }
+}
+
+/**
+ * 「この日に記録」保存処理
+ * ① モードをラジオボタンから取得（日ごとに異なってよい）
+ */
+function saveRecord() {
+  clearMessage('formMessage');
+
+  // バリデーション
+  if (!state.selectedDate) {
+    showMessage('日付を選択してください', 'error', 'formMessage');
+    return;
+  }
+  const mode = getSelectedMode();
+  if (!mode) {
+    showMessage('計算モード（機能1 または 機能2）を選択してください', 'error', 'formMessage');
+    return;
+  }
+
+  const newRecord = {
+    date:        state.selectedDate,
+    count:       parseInputInt('inputCount'),
+    count170:    parseInputInt('inputCount170'),
+    pickupCount: parseInputInt('inputPickup'),
+    otherIncome: parseInputInt('inputOther'),
+    mode,
+  };
+
+  const idx = state.records.findIndex(r => r.date === state.selectedDate);
+  if (idx >= 0) state.records[idx] = newRecord;
+  else          state.records.push(newRecord);
+
+  saveState();
+  renderAll();
+  showMessage('保存しました', 'success', 'formMessage');
+}
+
+/**
+ * ⑤ 直前の記録値をフォームに展開する
+ * selectedDate より前で最も新しいレコードを探す
+ */
+function fillPrevRecord() {
+  if (!state.selectedDate) {
+    showMessage('先に日付を選択してください', 'error', 'formMessage');
+    return;
+  }
+
+  // selectedDate より前のレコードを日付降順で並べ、最初の1件を取る
+  const prev = state.records
+    .filter(r => r.date < state.selectedDate)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+  if (!prev) {
+    showMessage('前の記録が見つかりません', 'error', 'formMessage');
+    return;
+  }
+
+  document.getElementById('inputCount').value    = prev.count;
+  document.getElementById('inputCount170').value = prev.count170;
+  document.getElementById('inputPickup').value   = prev.pickupCount;
+  document.getElementById('inputOther').value    = prev.otherIncome;
+
+  // ① モードも前回に合わせる
+  state.currentMode = prev.mode;
+  renderModeRadio();
+
+  updatePreview(); // ② プレビュー更新
+  showMessage(`${prev.date} の値を適用しました`, 'success', 'formMessage');
+}
+
+/**
+ * ⑧ 表示中の月のレコードをCSVとしてダウンロードする
+ * BOM付きUTF-8でExcelでも文字化けしない
+ */
+function exportCSV() {
+  const { viewYear, viewMonth } = state;
+  const recs = getMonthRecords(viewYear, viewMonth).sort((a, b) => a.date.localeCompare(b.date));
+
+  if (recs.length === 0) {
+    showMessage('この月の記録がありません', 'error', 'formMessage');
+    return;
+  }
+
+  const headers = ['日付', '配達数', '170枠', '集荷', 'その他収入', 'モード', '合算(税抜)', '合算(税込)'];
+  const rows = recs.map(r => [
+    r.date,
+    r.count,
+    r.count170,
+    r.pickupCount,
+    r.otherIncome,
+    r.mode === 'feature1' ? '機能1' : '機能2',
+    calcRecordTaxEx(r),
+    calcRecordTaxIn(r),
+  ]);
+
+  const csv  = [headers, ...rows].map(row => row.join(',')).join('\n');
+  const bom  = '\uFEFF'; // BOM: ExcelでのUTF-8文字化け防止
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `delivery-${toMonthKey(viewYear, viewMonth)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showMessage('CSVをダウンロードしました', 'success', 'formMessage');
+}
+
+/**
+ * 月を n ヶ月移動してアニメーション付きで再描画する
+ * @param {number} delta - 移動量（-1 = 前月, +1 = 翌月）
+ */
+function goMonth(delta) {
+  let m = state.viewMonth + delta;
+  let y = state.viewYear;
+  if (m > 11) { m = 0;  y++; }
+  if (m < 0)  { m = 11; y--; }
+  state.viewMonth = m;
+  state.viewYear  = y;
+  saveState();
+  renderAll();
+
+  // スワイプアニメーションを付与
+  const wrapper   = document.getElementById('calendarSwipe');
+  const animClass = delta > 0 ? 'swipe-next' : 'swipe-prev';
+  wrapper.classList.remove('swipe-next', 'swipe-prev');
+  requestAnimationFrame(() => {
+    wrapper.classList.add(animClass);
+    wrapper.addEventListener('animationend', () => {
+      wrapper.classList.remove(animClass);
+    }, { once: true });
+  });
+}
+
+/**
+ * カレンダー領域のタッチスワイプで月切り替え
+ * 水平移動が垂直移動より大きく、かつ50px以上でスワイプと判定
+ */
+function setupSwipe() {
+  const wrapper = document.getElementById('calendarSwipe');
+  let startX = 0, startY = 0;
+
+  wrapper.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  wrapper.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      goMonth(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+}
+
+/* ────────────────────────────────────────────────────────────
+   7. ユーティリティ
+──────────────────────────────────────────────────────────── */
+
+/** 数値を円表記に変換: 13200 → '¥13,200' */
+function yen(n) {
+  return '¥' + Math.round(n).toLocaleString('ja-JP');
+}
+
+/** 年月日 → 'YYYY-MM-DD' */
+function toDateStr(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** 年月 → 'YYYY-MM'（localStorage キー用） */
+function toMonthKey(year, month) {
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+/** input 要素の値を 0以上の整数で返す（空欄・不正値は 0） */
+function parseInputInt(id) {
+  const v = parseInt(document.getElementById(id).value, 10);
+  return (isNaN(v) || v < 0) ? 0 : v;
+}
+
+/** ① ラジオボタンから現在選択中のモードを返す */
+function getSelectedMode() {
+  const r1 = document.getElementById('modeFeature1');
+  const r2 = document.getElementById('modeFeature2');
+  if (r1 && r1.checked) return 'feature1';
+  if (r2 && r2.checked) return 'feature2';
+  return null;
+}
+
+/**
+ * メッセージを表示して 2秒後に消す
+ * @param {string} text     - 表示テキスト
+ * @param {'error'|'success'} type - 表示種別
+ * @param {string} targetId - 表示先要素の id
+ */
+function showMessage(text, type, targetId) {
+  const el = document.getElementById(targetId);
+  el.textContent = text;
+  el.className   = `form-message ${type}`;
+  setTimeout(() => {
+    if (el.textContent === text) clearMessage(targetId);
+  }, 2000);
+}
+
+/** メッセージをクリアする */
+function clearMessage(targetId) {
+  const el = document.getElementById(targetId);
+  el.textContent = '';
+  el.className   = 'form-message';
+}
+
+/* ────────────────────────────────────────────────────────────
+   8. 初期化
+──────────────────────────────────────────────────────────── */
+
+function init() {
+  loadState();
+  setupEvents();
+  renderAll();
+}
+
+document.addEventListener('DOMContentLoaded', init);

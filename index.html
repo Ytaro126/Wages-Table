@@ -1,220 +1,214 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!--
-    ============================
-    初心者向け: このファイルの役割
-    ============================
-    1) HTMLは「画面に何を置くか」を決めるファイルです。
-    2) 見た目はstyle.css、動きはmain.jsに分離しています。
-    3) id属性は「JSからその要素を見つけるための名前」です。
-    4) class属性は「CSSで見た目を当てるためのグループ名」です。
-  -->
   <meta charset="UTF-8">
-  <!-- モバイル画面幅に合わせる + iPhoneのノッチ安全領域を有効化 -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- iOSでホーム画面追加した時にアプリ風表示にする -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <!-- ステータスバーの見た目指定 -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <!-- 電話番号の自動リンク化を防止（誤タップ対策） -->
   <meta name="format-detection" content="telephone=no">
-  <title>配達管理アプリ</title>
-  <!-- 見た目の定義はCSSへ分離 -->
+  <title>配達記録</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!--
-    app-shell:
-    画面全体を1つの箱として扱うための土台。
-    CSS側で「375px基準」「safe-area余白」をこの箱に適用する。
-  -->
-  <div class="app-shell">
-    <header class="app-header">
-      <h1>配達管理</h1>
-      <p>iPhone Safari対応</p>
-    </header>
 
-    <main class="content">
-      <!--
-        カレンダー領域:
-        - 上段: 前月/年月表示/翌月ボタン
-        - 下段: 曜日行 + 日付グリッド
-      -->
-      <section class="card calendar-card">
-        <div class="calendar-head">
-          <!-- 前月/翌月移動 -->
-          <button id="prevMonthBtn" type="button" class="icon-btn" aria-label="前月">‹</button>
-          <!-- 年月表示。タップで年月日ピッカーを開く -->
-          <button id="monthLabelBtn" type="button" class="month-label" aria-label="年月日ピッカーを開く"></button>
-          <button id="nextMonthBtn" type="button" class="icon-btn" aria-label="翌月">›</button>
-        </div>
-        <!--
-          スワイプ判定対象エリア。
-          touchstart/touchendをここに付けることで、
-          カレンダー部分だけ左右スワイプ移動できるようにしている。
-        -->
-        <div id="calendarSwipeArea" class="calendar-swipe-area">
-          <!-- 曜日ヘッダはJSで生成 -->
-          <div class="week-header" id="weekHeader"></div>
-          <!-- 日付セルはJSで生成 -->
-          <div class="calendar-grid" id="calendarGrid"></div>
-        </div>
-      </section>
+<div id="app">
 
-      <!--
-        日別入力フォーム:
-        選択中の日付に対して、件数や追加収入を入力する場所。
-      -->
-      <section class="card form-card">
-        <h2>この日に記録</h2>
-        <div class="selected-date-row">
-          <span>選択日</span>
-          <!-- カレンダーで選択中の日付を表示 -->
-          <strong id="selectedDateText"></strong>
-        </div>
+  <!-- ヘッダー -->
+  <header class="header">
+    <h1 class="app-title">配達記録</h1>
+  </header>
 
-        <!--
-          数値入力:
-          - type=numberで数字キーボードを出しやすくする
-          - min=0でマイナス入力を防ぐ
-          - inputmode=numericでスマホの数字入力を促す
-          - value="" にして初期表示は空欄
-          ※ 実際の保存時はJSで空欄=>0に変換
-        -->
-        <div class="input-grid">
-          <label>
-            配達完了数
-            <input id="countInput" type="number" min="0" step="1" inputmode="numeric" value="">
-          </label>
-          <label>
-            170円配達枠
-            <input id="count170Input" type="number" min="0" step="1" inputmode="numeric" value="">
-          </label>
-          <label>
-            集荷枠（1件90円）
-            <input id="pickupInput" type="number" min="0" step="1" inputmode="numeric" value="">
-          </label>
-          <label>
-            その他収入（円）
-            <input id="otherIncomeInput" type="number" min="0" step="1" inputmode="numeric" value="">
-          </label>
-        </div>
-
-        <!--
-          チェック項目:
-          機能1と機能2は計算方式が異なるため同時ONにしない設計。
-          実際の排他制御はmain.jsで実行している。
-        -->
-        <div class="feature-group" role="group" aria-label="機能選択">
-          <label class="toggle-item">
-            <input id="feature1Check" type="checkbox">
-            <span>機能1（80以下14,000円 / 超過+110円）</span>
-          </label>
-          <label class="toggle-item">
-            <input id="feature2Check" type="checkbox">
-            <span>機能2（税抜150円 / 税込165円）</span>
-          </label>
-        </div>
-
-        <!-- 入力内容を選択日に保存 -->
-        <button id="recordBtn" type="button" class="primary-btn">この日に記録</button>
-        <!-- 保存可否などのエラーメッセージ表示 -->
-        <p id="errorText" class="error-text" aria-live="polite"></p>
-      </section>
-
-      <!--
-        月合計表示:
-        今見ている月(viewYear/viewMonth)だけを集計して表示する領域。
-      -->
-      <section class="card totals-card">
-        <h2>月合計</h2>
-        <label class="deduction-label">
-          <!-- 月ごとに差し引く固定控除 -->
-          月固定控除（円）
-          <input id="deductionInput" type="number" min="0" step="1" inputmode="numeric" value="0">
-        </label>
-        <!-- 合計値の表示エリア。中身はJSで組み立て -->
-        <div id="summaryGrid" class="summary-grid"></div>
-      </section>
-
-      <!--
-        一覧テーブル:
-        列が多いのでtableの親に横スクロールを持たせる。
-        tbodyの中身はJSで毎回描画し直す。
-      -->
-      <section class="card table-card">
-        <h2>一覧</h2>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>日付</th>
-                <th>配達数</th>
-                <th>170枠</th>
-                <th>集荷</th>
-                <th>その他</th>
-                <th>機能1</th>
-                <th>機能2</th>
-                <th>合算</th>
-                <th>削除</th>
-              </tr>
-            </thead>
-            <!-- データ行はJSで生成 -->
-            <tbody id="recordsTbody"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <!--
-    年月日ピッカーモーダル:
-    年月表示ボタンを押した時に開く。
-    年は要件に合わせて2025〜2030のみ。
-  -->
-  <div id="pickerModal" class="modal" aria-hidden="true">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="年月日ピッカー">
-      <div class="modal-head">
-        <h3>年月日を選択</h3>
-        <button id="pickerCloseBtn" type="button" class="icon-btn" aria-label="閉じる">×</button>
+  <!-- ① カレンダー -->
+  <section class="section card" id="calendarSection">
+    <div class="calendar-swipe-wrapper" id="calendarSwipe">
+      <div class="calendar-nav">
+        <button class="nav-btn" id="prevMonth" aria-label="前月">&#8249;</button>
+        <button class="month-title" id="monthTitle" aria-label="年月を選択">2025年1月</button>
+        <button class="nav-btn" id="nextMonth" aria-label="翌月">&#8250;</button>
       </div>
-      <div class="picker-row">
-        <label>年
-          <select id="pickerYear"></select>
+      <div class="calendar-dow">
+        <span class="dow-cell dow-sun">日</span>
+        <span class="dow-cell">月</span>
+        <span class="dow-cell">火</span>
+        <span class="dow-cell">水</span>
+        <span class="dow-cell">木</span>
+        <span class="dow-cell">金</span>
+        <span class="dow-cell dow-sat">土</span>
+      </div>
+      <!-- JSで動的生成 -->
+      <div id="calendarGrid"></div>
+    </div>
+  </section>
+
+  <!-- ② 記録入力フォーム（計算モード選択も内包） -->
+  <section class="section card" id="formSection">
+    <h2 class="section-title">記録入力</h2>
+
+    <!-- 選択日 -->
+    <div class="form-group">
+      <label class="form-label" for="selectedDateDisplay">選択日</label>
+      <input type="text" id="selectedDateDisplay" class="form-input"
+             readonly placeholder="カレンダーから日付を選択">
+    </div>
+
+    <!-- ① 改善: 計算モードをフォーム内でラジオ選択（日ごとに独立） -->
+    <div class="form-group">
+      <label class="form-label">
+        計算モード <span class="required-badge">必須</span>
+      </label>
+      <div class="mode-radio-group">
+        <label class="mode-radio-label" id="modeLabel1">
+          <input type="radio" name="mode" id="modeFeature1" value="feature1">
+          <span class="mode-radio-content">
+            <strong>機能1</strong>
+            <small>80個以下¥14,000 / 81↑+¥110/個</small>
+          </span>
         </label>
-        <label>月
-          <select id="pickerMonth"></select>
-        </label>
-        <label>日
-          <select id="pickerDay"></select>
+        <label class="mode-radio-label" id="modeLabel2">
+          <input type="radio" name="mode" id="modeFeature2" value="feature2">
+          <span class="mode-radio-content">
+            <strong>機能2</strong>
+            <small>税抜¥150 / 税込¥165/個</small>
+          </span>
         </label>
       </div>
-      <button id="pickerApplyBtn" type="button" class="primary-btn">選択</button>
+    </div>
+
+    <!-- ⑨ 改善: ±ステッパー付き数値入力 -->
+    <div class="form-group">
+      <label class="form-label" for="inputCount">配達完了数（件）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputCount" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputCount" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputCount" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputCount170">170円配達枠（件数）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputCount170" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputCount170" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputCount170" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputPickup">集荷枠（件数）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputPickup" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputPickup" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputPickup" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputOther">その他収入（円）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputOther" data-delta="-500" aria-label="500減らす">−</button>
+        <input type="number" id="inputOther" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputOther" data-delta="500" aria-label="500増やす">＋</button>
+      </div>
+    </div>
+
+    <!-- ② 改善: リアルタイム金額プレビュー -->
+    <div id="calcPreview" class="calc-preview" aria-live="polite"></div>
+
+    <!-- ⑤ 改善: 前回値クイック入力 -->
+    <button class="btn-ghost" id="fillPrev" type="button">前回値を使う</button>
+
+    <p id="formMessage" class="form-message" role="alert" aria-live="polite"></p>
+  </section>
+
+  <!-- 月固定控除 -->
+  <section class="section card">
+    <h2 class="section-title">月固定控除</h2>
+    <p class="section-note">表示中の月の最終合計から差し引く固定額</p>
+    <div class="form-group">
+      <label class="form-label" for="inputDeduction">控除額（円）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputDeduction" data-delta="-1000" aria-label="1000減らす">−</button>
+        <input type="number" id="inputDeduction" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputDeduction" data-delta="1000" aria-label="1000増やす">＋</button>
+      </div>
+    </div>
+    <button class="btn-secondary btn-full" id="saveDeduction">控除額を保存</button>
+  </section>
+
+  <!-- 月合計（④前月比も表示） -->
+  <section class="section card">
+    <h2 class="section-title">月合計</h2>
+    <!-- renderMonthlyTotals() で動的生成 -->
+    <div id="monthlyTotals"></div>
+    <!-- ⑧ 改善: CSVエクスポート -->
+    <button class="btn-secondary btn-full" id="exportCsv" style="margin-top: 1rem;">この月をCSVで出力</button>
+  </section>
+
+  <!-- 記録一覧テーブル（⑥2段階削除） -->
+  <section class="section card">
+    <h2 class="section-title">記録一覧</h2>
+    <p class="section-note">削除ボタンは2回タップで確定（誤削除防止）</p>
+    <div class="table-scroll">
+      <table id="recordsTable">
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>配達数</th>
+            <th>170枠</th>
+            <th>集荷</th>
+            <th>その他</th>
+            <th>機能1</th>
+            <th>機能2</th>
+            <th>合算(税抜)</th>
+            <th>合算(税込)</th>
+            <th>削除</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</div><!-- /#app -->
+
+<!-- 下部固定ボタン -->
+<div class="save-bar">
+  <button class="btn-primary" id="saveRecord">この日に記録</button>
+</div>
+
+<!-- 年月ピッカーモーダル -->
+<div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-overlay" id="pickerOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title">年月を選択</h3>
+    <div class="picker-row">
+      <select id="pickerYear" class="picker-select" aria-label="年"></select>
+      <select id="pickerMonth" class="picker-select" aria-label="月"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="pickerCancel">キャンセル</button>
+      <button class="btn-primary" id="pickerConfirm">確定</button>
     </div>
   </div>
+</div>
 
-  <!--
-    日別メモモーダル:
-    カレンダー内の金額を押した時、内訳確認用に表示する。
-  -->
-  <div id="memoModal" class="modal" aria-hidden="true">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="日別メモ">
-      <div class="modal-head">
-        <h3 id="memoTitle"></h3>
-        <button id="memoCloseBtn" type="button" class="icon-btn" aria-label="閉じる">×</button>
-      </div>
-      <div id="memoBody" class="memo-body"></div>
+<!-- 日別詳細モーダル -->
+<div id="memoModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-overlay" id="memoOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="memoTitle">詳細</h3>
+    <div id="memoBody"></div>
+    <div class="modal-actions modal-actions--single">
+      <button class="btn-primary" id="memoClose">× 閉じる</button>
     </div>
   </div>
+</div>
 
-  <!--
-    下部固定保存ボタン:
-    スクロールしても常に画面下に表示し、親指で押しやすくする。
-  -->
-  <button id="saveBtn" type="button" class="save-fixed-btn">保存</button>
-
-  <!-- ロジックはJSへ分離 -->
-  <script src="main.js"></script>
+<script src="main.js"></script>
 </body>
 </html>
