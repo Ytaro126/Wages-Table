@@ -29,6 +29,8 @@
   --radius:    16px;
   --radius-sm: 10px;
   --spacing:   16px;
+  --pad: clamp(0.75rem, 2vw, 1.25rem);
+  --btn-h: clamp(2.75rem, 6vw, 3.25rem);
 }
 
 /* ── リセット ── */
@@ -63,9 +65,11 @@ body {
   width:     100%;
   max-width: 37.5rem;
   margin:    0 auto;
-  padding:   0 var(--spacing);
+  padding-left:  calc(var(--pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--pad) + env(safe-area-inset-right));
+  padding-top:   0;
   /* 下部固定ボタン + ホームバー分 */
-  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
 /* ── ヘッダー ── */
@@ -76,11 +80,11 @@ body {
   top:      0;
   z-index:  100;
   /* iPhoneのノッチを避けた余白 */
-  padding-top:    calc(env(safe-area-inset-top) + 0.875rem);
+  padding-top:    calc(env(safe-area-inset-top) + var(--pad));
   padding-bottom: 0.75rem;
-  padding-left:   var(--spacing);
-  padding-right:  var(--spacing);
-  margin: 0 calc(-1 * var(--spacing));
+  padding-left:   var(--pad);
+  padding-right:  var(--pad);
+  margin: 0 calc(-1 * var(--pad));
   background:              rgba(15, 23, 42, 0.82);
   backdrop-filter:         blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -89,8 +93,8 @@ body {
 }
 .menu-btn {
   position: absolute;
-  left: var(--spacing);
-  top: 50%;
+  left: var(--pad);
+  top: calc(env(safe-area-inset-top) + var(--pad));
   transform: translateY(-50%);
   width: 2.5rem;
   height: 2.5rem;
@@ -725,8 +729,8 @@ tr:last-child td { border-bottom: none; }
   left:     0;
   right:    0;
   z-index:  100;
-  padding:  0.75rem var(--spacing);
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding:  0.75rem var(--pad);
+  padding-bottom: calc(var(--pad) + env(safe-area-inset-bottom));
   background:              rgba(15, 23, 42, 0.9);
   backdrop-filter:         blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -847,7 +851,9 @@ body.theme-light .save-bar {
   border-radius: 1rem;
   padding:     1.5rem var(--spacing);
   padding-bottom: 1.5rem;
-  max-height:  90dvh;
+  margin-top: calc(env(safe-area-inset-top) + var(--pad));
+  margin-bottom: calc(env(safe-area-inset-bottom) + var(--pad));
+  max-height: calc(100dvh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 2 * var(--pad)));
   overflow-y:  auto;
   -webkit-overflow-scrolling: touch;
   transform: translateX(-110%);
