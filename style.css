@@ -849,7 +849,7 @@ body.theme-light .save-bar {
   max-height:  90dvh;
   overflow-y:  auto;
   -webkit-overflow-scrolling: touch;
-  transform: translateX(110%);
+  transform: translateX(-110%);
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .modal:not(.hidden) .modal-content {
