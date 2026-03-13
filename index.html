@@ -131,6 +131,8 @@
 
     <!-- リアルタイム金額プレビュー（入力中に合計を即計算） -->
     <div id="calcPreview" class="calc-preview" aria-live="polite"></div>
+    <!-- 配達合計（通常+夜間） -->
+    <div id="totalCountDisplay" class="total-count-display" aria-live="polite"></div>
 
     <!-- 前回値クイック入力（直近の記録をコピー） -->
     <button class="btn-ghost" id="fillPrev" type="button">前回値を使う</button>
@@ -159,6 +161,7 @@
             <th>日付</th>
             <th>配達数</th>
             <th>夜間</th>
+            <th>配達合計</th>
             <th>集荷</th>
             <th>その他</th>
             <th>日給保証</th>
@@ -314,6 +317,6 @@
   </div>
 </div>
 
-<script src="main.js"></script>
+<script src="main.js?v=20250313"></script>
 </body>
 </html>

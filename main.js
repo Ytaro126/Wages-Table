@@ -263,6 +263,10 @@ function syncFormFromSelectedDate() {
   // 設定で選んだ currentMode は変更しない（過去記録が勝手に変わらないようにする）。
   renderModeRadio();
   updateCurrentModeDisplay();
+  updateTotalCountDisplay(
+    rec ? rec.count : 0,
+    rec ? rec.count170 : 0
+  );
   updatePreview(); // ② プレビュー更新
 }
 
@@ -298,6 +302,10 @@ function updatePreview() {
   const previewEl = document.getElementById('calcPreview');
   const mode = getSelectedMode();
 
+  const count = parseInputInt('inputCount');
+  const count170 = parseInputInt('inputCount170');
+  updateTotalCountDisplay(count, count170);
+
   if (!mode) {
     // モード未選択なら表示しない
     previewEl.innerHTML = '';
@@ -306,8 +314,8 @@ function updatePreview() {
 
   // 入力値を読み取って、仮レコードを作る
   const mockRec = {
-    count:       parseInputInt('inputCount'),
-    count170:    parseInputInt('inputCount170'),
+    count,
+    count170,
     pickupCount: parseInputInt('inputPickup'),
     otherIncome: parseInputInt('inputOther'),
     mode,
@@ -315,13 +323,23 @@ function updatePreview() {
 
   const ex  = calcRecordTaxEx(mockRec);
   const inc = calcRecordTaxIn(mockRec);
-
   // 税抜 / 税込 を1行で表示
   previewEl.innerHTML =
     `<span class="preview-label">本日の予想合計</span>` +
     `<span class="preview-ex">${yen(ex)}</span>` +
     `<span class="preview-sep">/</span>` +
     `<span class="preview-in">(${yen(inc)})</span>`;
+}
+
+function updateTotalCountDisplay(count, count170) {
+  const el = document.getElementById('totalCountDisplay');
+  if (!el) return;
+  const total = count + count170;
+  if (total === 0) {
+    el.textContent = '';
+    return;
+  }
+  el.textContent = `配達合計: ${total} 件（通常 ${count} / 夜間 ${count170}）`;
 }
 
 /**
@@ -413,6 +431,7 @@ function renderTable() {
       rec.date.slice(5).replace('-', '/'),
       rec.count,
       rec.count170,
+      rec.count + rec.count170,
       rec.pickupCount,
       yen(rec.otherIncome),
       f1, f2, f3,
@@ -519,6 +538,7 @@ function showMemoModal(rec) {
   // その日の内訳をモーダルに表示する
   const ex  = calcRecordTaxEx(rec);
   const inc = calcRecordTaxIn(rec);
+  const totalCount = rec.count + rec.count170;
 
   document.getElementById('memoTitle').textContent = `${rec.date} の記録`;
 
@@ -534,6 +554,7 @@ function showMemoModal(rec) {
   document.getElementById('memoBody').innerHTML =
     memoRow('配達完了数',   `${rec.count} 件`) +
     memoRow('夜間配達枠', `${rec.count170} 件`) +
+    memoRow('配達合計',     `${totalCount} 件`) +
     memoRow('集荷枠',       `${rec.pickupCount} 件`) +
     memoRow('その他収入',   yen(rec.otherIncome)) +
     memoRow('計算モード',   rec.mode === 'feature1' ? '日給保証' : rec.mode === 'feature2' ? '単価150' : '単価160') +
@@ -800,6 +821,7 @@ function openSaveConfirm() {
     row('日付', preview.date) +
     row('配達完了数', `${preview.count} 件`) +
     row('夜間配達枠', `${preview.count170} 件`) +
+    row('配達合計', `${preview.count + preview.count170} 件`) +
     row('集荷枠', `${preview.pickupCount} 件`) +
     row('その他収入', yen(preview.otherIncome)) +
     row('計算モード', mode === 'feature1' ? '日給保証' : mode === 'feature2' ? '単価150' : '単価160') +
