@@ -169,12 +169,15 @@ function loadState() {
  * ⑦ 記録ありの日にドットインジケーターを表示
  */
 function renderCalendar() {
+  const monthTitleEl = document.getElementById('monthTitle');
+  const grid = document.getElementById('calendarGrid');
+  if (!monthTitleEl || !grid) return;
+
   // カレンダーのヘッダー（年月）を更新
   const { viewYear, viewMonth, selectedDate } = state;
-  document.getElementById('monthTitle').textContent = `${viewYear}年${viewMonth + 1}月`;
+  monthTitleEl.textContent = `${viewYear}年${viewMonth + 1}月`;
 
   // いったん空にしてから作り直す（表示のズレ防止）
-  const grid = document.getElementById('calendarGrid');
   grid.innerHTML = '';
 
   // その月の「1日」が何曜日か
@@ -596,15 +599,20 @@ function showPickerModal() {
 ──────────────────────────────────────────────────────────── */
 
 function setupEvents() {
+  const bind = (id, event, handler) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener(event, handler);
+  };
 
   // ── 月切り替え ──
   // ボタン押下で表示月を移動
-  document.getElementById('prevMonth').addEventListener('click', () => goMonth(-1));
-  document.getElementById('nextMonth').addEventListener('click', () => goMonth(1));
-  document.getElementById('monthTitle').addEventListener('click', showPickerModal);
+  bind('prevMonth', 'click', () => goMonth(-1));
+  bind('nextMonth', 'click', () => goMonth(1));
+  bind('monthTitle', 'click', showPickerModal);
 
   // ── ピッカー ──
-  document.getElementById('pickerConfirm').addEventListener('click', () => {
+  bind('pickerConfirm', 'click', () => {
     // セレクトの値を数値に変換して反映
     state.viewYear  = parseInt(document.getElementById('pickerYear').value,  10);
     state.viewMonth = parseInt(document.getElementById('pickerMonth').value, 10);
@@ -613,40 +621,40 @@ function setupEvents() {
     document.getElementById('pickerModal').classList.add('hidden');
   });
   ['pickerCancel', 'pickerOverlay'].forEach(id => {
-    document.getElementById(id).addEventListener('click', () => {
+    bind(id, 'click', () => {
       document.getElementById('pickerModal').classList.add('hidden');
     });
   });
 
   // ── メモモーダル閉じる ──
   ['memoClose', 'memoOverlay'].forEach(id => {
-    document.getElementById(id).addEventListener('click', () => {
+    bind(id, 'click', () => {
       document.getElementById('memoModal').classList.add('hidden');
     });
   });
 
   // ── メニュー ──
-  document.getElementById('menuButton').addEventListener('click', openMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuHome').addEventListener('click', () => {
+  bind('menuButton', 'click', openMenu);
+  bind('menuOverlay', 'click', closeMenu);
+  bind('menuHome', 'click', () => {
     closeMenu();
     showView('Home');
   });
-  document.getElementById('menuSettings').addEventListener('click', () => {
+  bind('menuSettings', 'click', () => {
     closeMenu();
     showView('Settings');
   });
-  document.getElementById('menuAnnual').addEventListener('click', () => {
+  bind('menuAnnual', 'click', () => {
     closeMenu();
     showView('Annual');
   });
 
   // ── テーマ切替 ──
-  document.getElementById('themeDark').addEventListener('click', () => applyTheme('dark'));
-  document.getElementById('themeLight').addEventListener('click', () => applyTheme('light'));
+  bind('themeDark', 'click', () => applyTheme('dark'));
+  bind('themeLight', 'click', () => applyTheme('light'));
 
   // ── 年間グラフ 年選択 ──
-  document.getElementById('annualYear').addEventListener('change', (e) => {
+  bind('annualYear', 'change', (e) => {
     state.chartYear = parseInt(e.target.value, 10);
     saveState();
     renderAnnualChart(state.chartYear);
@@ -654,9 +662,9 @@ function setupEvents() {
 
   // ── 保存確認モーダル ──
   ['saveConfirmCancel', 'saveConfirmOverlay'].forEach(id => {
-    document.getElementById(id).addEventListener('click', closeSaveConfirm);
+    bind(id, 'click', closeSaveConfirm);
   });
-  document.getElementById('saveConfirmOk').addEventListener('click', () => {
+  bind('saveConfirmOk', 'click', () => {
     closeSaveConfirm();
     saveRecord();
   });
@@ -674,11 +682,11 @@ function setupEvents() {
 
   // ── ② プレビュー: テキスト入力のたびに更新 ──
   ['inputCount', 'inputCount170', 'inputPickup', 'inputOther'].forEach(id => {
-    document.getElementById(id).addEventListener('input', updatePreview);
+    bind(id, 'input', updatePreview);
   });
 
   // ── ⑨ ステッパーボタン（formSection 内の全ボタンにまとめて対応）──
-  document.getElementById('formSection').addEventListener('click', handleStepperClick);
+  bind('formSection', 'click', handleStepperClick);
   // 控除額のステッパーは formSection の外なので別途登録
   document.querySelector('#formSection ~ .section .stepper-wrap') &&
     document.querySelectorAll('.stepper-btn').forEach(btn => {
@@ -695,13 +703,13 @@ function setupEvents() {
   });
 
   // ── 「この日に記録」ボタン ──
-  document.getElementById('saveRecord').addEventListener('click', openSaveConfirm);
+  bind('saveRecord', 'click', openSaveConfirm);
 
   // ── ⑤ 前回値を使う ──
-  document.getElementById('fillPrev').addEventListener('click', fillPrevRecord);
+  bind('fillPrev', 'click', fillPrevRecord);
 
   // ── 控除額保存 ──
-  document.getElementById('saveDeduction').addEventListener('click', () => {
+  bind('saveDeduction', 'click', () => {
     // 月キーで控除額を保存
     const monthKey = toMonthKey(state.viewYear, state.viewMonth);
     state.monthlyDeductions[monthKey] = parseInputInt('inputDeduction');
@@ -711,7 +719,7 @@ function setupEvents() {
   });
 
   // ── ⑧ CSVエクスポート ──
-  document.getElementById('exportCsv').addEventListener('click', exportCSV);
+  bind('exportCsv', 'click', exportCSV);
 
   // ── カレンダースワイプ ──
   setupSwipe();
