@@ -31,6 +31,7 @@
   --spacing:   16px;
   --pad: clamp(0.75rem, 2vw, 1.25rem);
   --btn-h: clamp(2.75rem, 6vw, 3.25rem);
+  --header-h: 3.25rem;
 }
 
 /* ── リセット ── */
@@ -67,7 +68,7 @@ body {
   margin:    0 auto;
   padding-left:  calc(var(--pad) + env(safe-area-inset-left));
   padding-right: calc(var(--pad) + env(safe-area-inset-right));
-  padding-top:   0;
+  padding-top:   calc(var(--header-h) + env(safe-area-inset-top));
   /* 下部固定ボタン + ホームバー分 */
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
@@ -75,16 +76,22 @@ body {
 /* ── ヘッダー ── */
 .header {
   /* スクロールしてもヘッダーを上に固定 */
-  position: sticky;
-  position: relative;
+  position: fixed;
   top:      0;
+  left:     50%;
+  transform: translateX(-50%);
+  width:    100%;
+  max-width: 37.5rem;
   z-index:  100;
+  height: calc(var(--header-h) + env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  justify-content: center;
   /* iPhoneのノッチを避けた余白 */
-  padding-top:    calc(env(safe-area-inset-top) + var(--pad));
-  padding-bottom: 0.75rem;
+  padding-top:    env(safe-area-inset-top);
   padding-left:   var(--pad);
   padding-right:  var(--pad);
-  margin: 0 calc(-1 * var(--pad));
+  margin: 0;
   background:              rgba(15, 23, 42, 0.82);
   backdrop-filter:         blur(20px);
   -webkit-backdrop-filter: blur(20px);
