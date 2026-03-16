@@ -285,9 +285,10 @@ body {
   border-color: rgba(248, 113, 113, 0.35);
 }
 .cal-holiday-badge {
-  font-size: 0.625rem;
-  color: #FCA5A5;
+  font-size: 0.6875rem;
+  color: #F87171;
   margin-top: 0.125rem;
+  font-weight: 700;
 }
 .cal-blank {
   /* 月初の空白セルはクリックできない */

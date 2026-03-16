@@ -317,11 +317,9 @@ function syncFormFromSelectedDate() {
   document.getElementById('inputOther').value    = rec ? rec.otherIncome : '';
 
   // 勤務日/休日の表示を更新
-  const workRadio = document.getElementById('workdayWork');
-  const holidayRadio = document.getElementById('workdayHoliday');
-  if (workRadio && holidayRadio) {
-    if (isHoliday) holidayRadio.checked = true;
-    else workRadio.checked = true;
+  const workdaySelect = document.getElementById('workdaySelect');
+  if (workdaySelect) {
+    workdaySelect.value = isHoliday ? 'holiday' : 'work';
   }
 
   // 既存レコードのモードは「その記録だけ」のもの。
@@ -722,6 +720,24 @@ function setupEvents() {
   bind('themeDark', 'click', () => applyTheme('dark'));
   bind('themeLight', 'click', () => applyTheme('light'));
 
+  // ── 休日セレクトの即時反映 ──
+  bind('workdaySelect', 'change', (e) => {
+    if (!state.selectedDate) {
+      showAlert('日付を選択してください');
+      e.target.value = 'work';
+      return;
+    }
+    if (e.target.value === 'holiday') {
+      state.holidays[state.selectedDate] = true;
+      saveState();
+      renderCalendar();
+    } else {
+      delete state.holidays[state.selectedDate];
+      saveState();
+      renderCalendar();
+    }
+  });
+
   // ── 年間グラフ 年選択 ──
   bind('annualYear', 'change', (e) => {
     state.chartYear = parseInt(e.target.value, 10);
@@ -856,7 +872,7 @@ function saveRecord() {
   }
 
   // 勤務日/休日の取得
-  const isHoliday = document.getElementById('workdayHoliday')?.checked;
+  const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
 
   // 休日なら「記録しない」で保存（休日登録だけ行う）
   if (isHoliday) {
@@ -933,18 +949,11 @@ function openSaveConfirm(skipExistingCheck = false) {
   // 勤務日/休日の判定（休日なら保存確認をスキップ）
   const isHoliday = document.getElementById('workdayHoliday')?.checked;
   if (isHoliday) {
-    showAlert('休日登録します。よろしいですか？', {
-      showCancel: true,
-      okText: '登録する',
-      cancelText: 'キャンセル',
-      onOk: () => {
-        state.holidays[state.selectedDate] = true;
-        state.records = state.records.filter(r => r.date !== state.selectedDate);
-        saveState();
-        renderAll();
-        showMessage('休日として保存しました', 'success', 'formMessage');
-      },
-    });
+    state.holidays[state.selectedDate] = true;
+    state.records = state.records.filter(r => r.date !== state.selectedDate);
+    saveState();
+    renderAll();
+    showMessage('休日として保存しました', 'success', 'formMessage');
     return;
   }
 

@@ -82,23 +82,11 @@
 
     <!-- 勤務日/休日の切り替え -->
     <div class="form-group">
-      <label class="form-label">勤務日/休日</label>
-      <div class="mode-radio-group" id="workdayGroup">
-        <label class="mode-radio-label">
-          <input type="radio" name="workday" id="workdayWork" value="work">
-          <span class="mode-radio-content">
-            <strong>出勤日</strong>
-            <small>通常の記録日</small>
-          </span>
-        </label>
-        <label class="mode-radio-label">
-          <input type="radio" name="workday" id="workdayHoliday" value="holiday">
-          <span class="mode-radio-content">
-            <strong>休日</strong>
-            <small>休日として登録</small>
-          </span>
-        </label>
-      </div>
+      <label class="form-label" for="workdaySelect">休日設定</label>
+      <select id="workdaySelect" class="form-input">
+        <option value="work">--</option>
+        <option value="holiday">休日</option>
+      </select>
     </div>
 
     <!-- 現在の計算モード（設定画面で決める） -->
