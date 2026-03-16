@@ -277,6 +277,15 @@ function renderCalendar() {
       holidayBadge.className = 'cal-holiday-badge';
       holidayBadge.textContent = '休日';
       cell.appendChild(holidayBadge);
+
+      // 休日は金額を「---」表示にする
+      const amountDiv  = document.createElement('div');
+      amountDiv.className = 'cal-amount';
+      const exSpan = document.createElement('span');
+      exSpan.className   = 'cal-tax-ex';
+      exSpan.textContent = '---';
+      amountDiv.appendChild(exSpan);
+      cell.appendChild(amountDiv);
     }
 
     // セルタップ時の動作
@@ -364,6 +373,12 @@ function updatePreview() {
   // 入力値だけで仮計算（保存はしない）
   const previewEl = document.getElementById('calcPreview');
   const mode = getSelectedMode();
+
+  const isHolidaySelected = document.getElementById('workdaySelect')?.value === 'holiday';
+  if (isHolidaySelected) {
+    previewEl.innerHTML = `<div class="preview-line">本日の予想合計: ----</div>`;
+    return;
+  }
 
   const count = parseInputInt('inputCount');
   const count170 = parseInputInt('inputCount170');
@@ -728,6 +743,12 @@ function setupEvents() {
       return;
     }
     if (e.target.value === 'holiday') {
+      const exists = state.records.some(r => r.date === state.selectedDate);
+      if (exists) {
+        showAlert('この日は記録されています。休日に修正したい場合はお手数おかけしますが一度削除して下さい。');
+        e.target.value = 'work';
+        return;
+      }
       state.holidays[state.selectedDate] = true;
       saveState();
       renderCalendar();
@@ -864,22 +885,18 @@ function saveRecord() {
     showMessage('日付を選択してください', 'error', 'formMessage');
     return;
   }
-  const mode = getSelectedMode();
-  if (!mode) {
-    // モード未選択は保存できない
-    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
-    return;
-  }
-
   // 勤務日/休日の取得
   const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
 
   // 休日なら「記録しない」で保存（休日登録だけ行う）
   if (isHoliday) {
     if (state.selectedDate) {
+      const exists = state.records.some(r => r.date === state.selectedDate);
+      if (exists) {
+        showAlert('この日は記録されています。休日に修正したい場合はお手数おかけしますが一度削除して下さい。');
+        return;
+      }
       state.holidays[state.selectedDate] = true;
-      // もし同日レコードがあれば削除（休日に切り替えるため）
-      state.records = state.records.filter(r => r.date !== state.selectedDate);
       saveState();
       renderAll();
       showMessage('休日として保存しました', 'success', 'formMessage');
@@ -890,6 +907,13 @@ function saveRecord() {
     if (state.selectedDate) {
       delete state.holidays[state.selectedDate];
     }
+  }
+
+  const mode = getSelectedMode();
+  if (!mode) {
+    // モード未選択は保存できない
+    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
+    return;
   }
 
   // 入力欄から値を集めて「1日分のデータ」を作る
@@ -940,20 +964,24 @@ function openSaveConfirm(skipExistingCheck = false) {
     showMessage('日付を選択してください', 'error', 'formMessage');
     return;
   }
-  const mode = getSelectedMode();
-  if (!mode) {
-    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
-    return;
-  }
-
   // 勤務日/休日の判定（休日なら保存確認をスキップ）
-  const isHoliday = document.getElementById('workdayHoliday')?.checked;
+  const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
   if (isHoliday) {
+    const exists = state.records.some(r => r.date === state.selectedDate);
+    if (exists) {
+      showAlert('この日は記録されています。休日に修正したい場合はお手数おかけしますが一度削除して下さい。');
+      return;
+    }
     state.holidays[state.selectedDate] = true;
-    state.records = state.records.filter(r => r.date !== state.selectedDate);
     saveState();
     renderAll();
     showMessage('休日として保存しました', 'success', 'formMessage');
+    return;
+  }
+
+  const mode = getSelectedMode();
+  if (!mode) {
+    showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
     return;
   }
 
