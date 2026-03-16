@@ -1004,9 +1004,19 @@ function setupSwipe() {
   let dragging = false;
   let width = 1;
   let activePointerId = null;
+  let rafId = null;
+  let pendingX = 0;
 
   const setTranslate = (x) => {
     wrapper.style.transform = `translate3d(${x}px, 0, 0)`;
+  };
+  const requestMove = (x) => {
+    pendingX = x;
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      setTranslate(pendingX);
+      rafId = null;
+    });
   };
 
   const onStart = (clientX, clientY, pointerId) => {
@@ -1027,7 +1037,7 @@ function setupSwipe() {
       if (Math.abs(dx) <= Math.abs(dy)) return false;
       dragging = true;
     }
-    setTranslate(dx);
+    requestMove(dx);
     return true;
   };
 
@@ -1039,6 +1049,7 @@ function setupSwipe() {
 
     wrapper.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
     if (shouldSlide) {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       setTranslate(dx < 0 ? -width : width);
       wrapper.addEventListener('transitionend', () => {
         wrapper.style.transition = '';
@@ -1046,6 +1057,7 @@ function setupSwipe() {
         goMonth(dir, false);
       }, { once: true });
     } else {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       setTranslate(0);
       wrapper.addEventListener('transitionend', () => {
         wrapper.style.transition = '';

@@ -136,6 +136,11 @@ body {
   padding:       var(--spacing);
 }
 
+/* カレンダー枠外にスワイプ中の内容が出ないようにする */
+#calendarSection {
+  overflow: hidden;
+}
+
 .section-title {
   /* 見出しは小さく・強調色で統一 */
   font-size:      0.6875rem;
@@ -161,6 +166,7 @@ body {
 .calendar-swipe-wrapper {
   will-change: transform, opacity;
   touch-action: pan-y;
+  overflow: hidden;
 }
 
 @keyframes slideFromRight {
@@ -237,6 +243,8 @@ body {
   /* 7列のカレンダー */
   display:               grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 3.5rem;
+  min-height: 21.625rem; /* 6行分 + gap の高さを確保 */
   gap: 0.125rem;
 }
 
