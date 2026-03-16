@@ -367,6 +367,7 @@ function updatePreview() {
 
   const isHolidaySelected = document.getElementById('workdaySelect')?.value === 'holiday';
   if (isHolidaySelected) {
+    // 休日を選んでいるときは金額計算をしない
     previewEl.innerHTML = `<div class="preview-line">本日の予想合計: ----</div>`;
     return;
   }
@@ -391,6 +392,7 @@ function updatePreview() {
     mode,
   };
 
+  // 税抜・税込の合計金額を計算
   const ex  = calcRecordTaxEx(mockRec);
   const inc = calcRecordTaxIn(mockRec);
   // 税抜 / 税込 を1行で表示
@@ -707,6 +709,7 @@ function setupEvents() {
   });
 
   // ── メニュー ──
+  // ハンバーガーを開く / 閉じる
   bind('menuButton', 'click', openMenu);
   bind('menuOverlay', 'click', closeMenu);
   bind('menuHome', 'click', () => {
@@ -727,6 +730,7 @@ function setupEvents() {
   bind('themeLight', 'click', () => applyTheme('light'));
 
   // ── 休日セレクトの即時反映 ──
+  // 休日を選んだ瞬間に「休日として登録」する
   bind('workdaySelect', 'change', (e) => {
     if (!state.selectedDate) {
       showAlert('日付を選択してください');
@@ -748,6 +752,7 @@ function setupEvents() {
       saveState();
       renderCalendar();
     }
+    // 休日選択が変わったらプレビューも即更新
     updatePreview();
   });
 
@@ -882,6 +887,8 @@ function saveRecord() {
 
   // 休日なら「記録しない」で保存（休日登録だけ行う）
   if (isHoliday) {
+    // 休日の日に「保存」を押したら案内ポップアップだけ出す
+    showAlert('この日は休日で登録済です。');
     if (state.selectedDate) {
       const exists = state.records.some(r => r.date === state.selectedDate);
       if (exists) {
@@ -899,6 +906,16 @@ function saveRecord() {
     if (state.selectedDate) {
       delete state.holidays[state.selectedDate];
     }
+  }
+
+  // 個数が全部0ならエラー
+  const count = parseInputInt('inputCount');
+  const count170 = parseInputInt('inputCount170');
+  const pickup = parseInputInt('inputPickup');
+  if (count === 0 && count170 === 0 && pickup === 0) {
+    // 実質「何も入力されていない」ので保存させない
+    showAlert('配達個数を記録して下さい。');
+    return;
   }
 
   const mode = getSelectedMode();
@@ -924,6 +941,7 @@ function saveRecord() {
   if (idx >= 0) state.records[idx] = newRecord;
   else          state.records.push(newRecord);
 
+  // 保存 → 再描画 → 完了メッセージ
   saveState();
   renderAll();
   showMessage('保存しました', 'success', 'formMessage');
@@ -959,6 +977,8 @@ function openSaveConfirm(skipExistingCheck = false) {
   // 勤務日/休日の判定（休日なら保存確認をスキップ）
   const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
   if (isHoliday) {
+    // 休日のときは「保存確認」は出さずに終了
+    showAlert('この日は休日で登録済です。');
     const exists = state.records.some(r => r.date === state.selectedDate);
     if (exists) {
       showAlert('この日は記録されています。休日に修正したい場合はお手数おかけしますが一度削除して下さい。');
@@ -971,6 +991,16 @@ function openSaveConfirm(skipExistingCheck = false) {
     return;
   }
 
+  // 個数が0なら保存確認を出さない
+  const count = parseInputInt('inputCount');
+  const count170 = parseInputInt('inputCount170');
+  const pickup = parseInputInt('inputPickup');
+  if (count === 0 && count170 === 0 && pickup === 0) {
+    showAlert('配達個数を記録して下さい。');
+    return;
+  }
+
+  // 計算モードが未選択なら保存できない
   const mode = getSelectedMode();
   if (!mode) {
     showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
@@ -991,6 +1021,7 @@ function openSaveConfirm(skipExistingCheck = false) {
     }
   }
 
+  // ここから下は「保存確認の内容」を作る処理
   const preview = {
     date: state.selectedDate,
     count: parseInputInt('inputCount'),
