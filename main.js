@@ -17,6 +17,22 @@
 'use strict';
 // strictモード: うっかりミス（未宣言変数など）を防ぐための安全装置
 
+/*
+  ─────────────────────────────────────────────
+  初心者向け: このファイルで使っているJS基礎
+  ─────────────────────────────────────────────
+  1. 変数・定数: const / let
+  2. 配列: records は「データの一覧」を配列で持つ
+  3. オブジェクト: record は { key: value } の形
+  4. 関数: function foo() {...}
+  5. 条件分岐: if / else if / else
+  6. ループ: for / forEach
+  7. 文字列結合: テンプレート文字列 `${}`
+  8. DOM操作: document.getElementById / createElement
+  9. イベント: addEventListener (クリックや入力)
+ 10. 保存: localStorage でブラウザ内に保存
+*/
+
 /* ────────────────────────────────────────────────────────────
    1. 定数・状態管理
 ──────────────────────────────────────────────────────────── */
@@ -100,10 +116,12 @@ function getMonthRecords(year, month) {
 function calcMonthlyTotals(year, month) {
   // 月内レコードを集めて合計値を作る
   const recs = getMonthRecords(year, month);
+  // let は「後で値を変える予定の変数」
   let totalCount = 0, total170 = 0, totalPickup = 0, totalOther = 0;
   let totalF1 = 0, totalF2Ex = 0, totalF2In = 0, totalF3Ex = 0, totalF3In = 0;
   let totalEx = 0, totalIn = 0;
 
+  // forEach は「配列の要素を順番に処理」するループ
   recs.forEach(r => {
     // 数量合計
     totalCount  += r.count;
@@ -137,6 +155,7 @@ function calcMonthlyTotals(year, month) {
 
 function saveState() {
   // JSON文字列にしてlocalStorageへ保存
+  // localStorage は「ブラウザ内のメモ帳」のようなもの
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { console.warn('保存失敗:', e); }
 }
@@ -147,7 +166,9 @@ function loadState() {
   if (!raw) return;
   try {
     // 文字列 → オブジェクト
+    // JSON.parse は「文字列をデータに戻す」関数
     const saved = JSON.parse(raw);
+    // スプレッド構文 { ...a, ...b } でオブジェクトを合体
     state = { ...state, ...saved };
 
     // ① 旧バージョンとの互換性: feature1Enabled/feature2Enabled → currentMode に移行
@@ -175,6 +196,7 @@ function renderCalendar() {
 
   // カレンダーのヘッダー（年月）を更新
   const { viewYear, viewMonth, selectedDate } = state;
+  // テンプレート文字列で「年」と「月」を合成
   monthTitleEl.textContent = `${viewYear}年${viewMonth + 1}月`;
 
   // いったん空にしてから作り直す（表示のズレ防止）
@@ -187,6 +209,7 @@ function renderCalendar() {
 
   // 空白セル
   for (let i = 0; i < firstDayOfWeek; i++) {
+    // createElement でHTML要素をJSから作れる
     const blank = document.createElement('div');
     blank.className = 'cal-cell cal-blank';
     grid.appendChild(blank);
@@ -209,6 +232,7 @@ function renderCalendar() {
     cell.appendChild(dayNum);
 
     if (rec) {
+      // if (rec) は「その日が記録済みなら」という条件分岐
       // ⑦ ドットインジケーター
       const dot = document.createElement('span');
       dot.className = 'cal-dot';
@@ -229,6 +253,7 @@ function renderCalendar() {
 
     // セルタップ時の動作
     cell.addEventListener('click', () => {
+      // addEventListener で「クリック時の処理」を登録できる
       // 既に選択中の日付をタップしたら詳細を開く
       if (state.selectedDate === dateStr) {
         if (rec) showMemoModal(rec);
@@ -599,6 +624,7 @@ function showPickerModal() {
 ──────────────────────────────────────────────────────────── */
 
 function setupEvents() {
+  // 関数の中に関数を作ることもできる（ヘルパー関数）
   const bind = (id, event, handler) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -620,6 +646,7 @@ function setupEvents() {
     renderAll();
     document.getElementById('pickerModal').classList.add('hidden');
   });
+  // 配列を forEach で回して、同じ処理をまとめて書く
   ['pickerCancel', 'pickerOverlay'].forEach(id => {
     bind(id, 'click', () => {
       document.getElementById('pickerModal').classList.add('hidden');
