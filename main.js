@@ -277,15 +277,6 @@ function renderCalendar() {
       holidayBadge.className = 'cal-holiday-badge';
       holidayBadge.textContent = '休日';
       cell.appendChild(holidayBadge);
-
-      // 休日は金額を「---」表示にする
-      const amountDiv  = document.createElement('div');
-      amountDiv.className = 'cal-amount';
-      const exSpan = document.createElement('span');
-      exSpan.className   = 'cal-tax-ex';
-      exSpan.textContent = '---';
-      amountDiv.appendChild(exSpan);
-      cell.appendChild(amountDiv);
     }
 
     // セルタップ時の動作
