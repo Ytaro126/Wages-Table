@@ -1006,6 +1006,7 @@ function setupSwipe() {
   let activePointerId = null;
   let rafId = null;
   let pendingX = 0;
+  let isAnimating = false;
 
   const setTranslate = (x) => {
     wrapper.style.transform = `translate3d(${x}px, 0, 0)`;
@@ -1020,6 +1021,7 @@ function setupSwipe() {
   };
 
   const onStart = (clientX, clientY, pointerId) => {
+    if (isAnimating) return;
     startX = clientX;
     startY = clientY;
     dx = 0;
@@ -1051,9 +1053,17 @@ function setupSwipe() {
     if (shouldSlide) {
       if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       setTranslate(dx < 0 ? -width : width);
-      wrapper.addEventListener('transitionend', () => {
+      isAnimating = true;
+      const fallback = setTimeout(() => {
         wrapper.style.transition = '';
         wrapper.style.transform = '';
+        isAnimating = false;
+      }, 500);
+      wrapper.addEventListener('transitionend', () => {
+        clearTimeout(fallback);
+        wrapper.style.transition = '';
+        wrapper.style.transform = '';
+        isAnimating = false;
         goMonth(dir, false);
       }, { once: true });
     } else {
@@ -1068,43 +1078,54 @@ function setupSwipe() {
     dragging = false;
   };
 
-  // Pointer Events（iOS 13+）
-  wrapper.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    wrapper.setPointerCapture?.(e.pointerId);
-    onStart(e.clientX, e.clientY, e.pointerId);
-  }, { passive: true });
+  const hasPointer = !!window.PointerEvent;
 
-  wrapper.addEventListener('pointermove', (e) => {
-    if (activePointerId !== e.pointerId) return;
-    const moved = onMove(e.clientX, e.clientY);
-    if (moved) e.preventDefault();
-  }, { passive: false });
+  if (hasPointer) {
+    // Pointer Events（iOS 13+）
+    wrapper.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      wrapper.setPointerCapture?.(e.pointerId);
+      onStart(e.clientX, e.clientY, e.pointerId);
+    }, { passive: true });
 
-  wrapper.addEventListener('pointerup', (e) => {
-    if (activePointerId !== e.pointerId) return;
-    onEnd();
-  }, { passive: true });
+    wrapper.addEventListener('pointermove', (e) => {
+      if (activePointerId !== e.pointerId) return;
+      const moved = onMove(e.clientX, e.clientY);
+      if (moved) e.preventDefault();
+    }, { passive: false });
 
-  wrapper.addEventListener('pointercancel', () => {
-    onEnd();
-  }, { passive: true });
+    wrapper.addEventListener('pointerup', (e) => {
+      if (activePointerId !== e.pointerId) return;
+      onEnd();
+    }, { passive: true });
 
-  // フォールバック（古い環境）
-  wrapper.addEventListener('touchstart', (e) => {
-    if (!e.touches[0]) return;
-    onStart(e.touches[0].clientX, e.touches[0].clientY, 'touch');
-  }, { passive: true });
+    wrapper.addEventListener('pointercancel', () => {
+      onEnd();
+    }, { passive: true });
 
-  wrapper.addEventListener('touchmove', (e) => {
-    if (!e.touches[0]) return;
-    const moved = onMove(e.touches[0].clientX, e.touches[0].clientY);
-    if (moved) e.preventDefault();
-  }, { passive: false });
+    window.addEventListener('pointerup', (e) => {
+      if (activePointerId !== null && activePointerId === e.pointerId) onEnd();
+    }, { passive: true });
+    window.addEventListener('pointercancel', () => {
+      if (activePointerId !== null) onEnd();
+    }, { passive: true });
+  } else {
+    // フォールバック（古い環境）
+    wrapper.addEventListener('touchstart', (e) => {
+      if (!e.touches[0]) return;
+      onStart(e.touches[0].clientX, e.touches[0].clientY, 'touch');
+    }, { passive: true });
 
-  wrapper.addEventListener('touchend', () => {
-    onEnd();
-  }, { passive: true });
+    wrapper.addEventListener('touchmove', (e) => {
+      if (!e.touches[0]) return;
+      const moved = onMove(e.touches[0].clientX, e.touches[0].clientY);
+      if (moved) e.preventDefault();
+    }, { passive: false });
+
+    wrapper.addEventListener('touchend', () => {
+      onEnd();
+    }, { passive: true });
+  }
 }
 
 /* ────────────────────────────────────────────────────────────
