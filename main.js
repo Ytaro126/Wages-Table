@@ -748,6 +748,7 @@ function setupEvents() {
       saveState();
       renderCalendar();
     }
+    updatePreview();
   });
 
   // ── 年間グラフ 年選択 ──
