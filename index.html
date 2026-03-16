@@ -80,6 +80,27 @@
              readonly placeholder="カレンダーから日付を選択">
     </div>
 
+    <!-- 勤務日/休日の切り替え -->
+    <div class="form-group">
+      <label class="form-label">勤務日/休日</label>
+      <div class="mode-radio-group" id="workdayGroup">
+        <label class="mode-radio-label">
+          <input type="radio" name="workday" id="workdayWork" value="work">
+          <span class="mode-radio-content">
+            <strong>出勤日</strong>
+            <small>通常の記録日</small>
+          </span>
+        </label>
+        <label class="mode-radio-label">
+          <input type="radio" name="workday" id="workdayHoliday" value="holiday">
+          <span class="mode-radio-content">
+            <strong>休日</strong>
+            <small>休日として登録</small>
+          </span>
+        </label>
+      </div>
+    </div>
+
     <!-- 現在の計算モード（設定画面で決める） -->
     <div class="form-group">
       <label class="form-label">計算モード（設定）</label>
@@ -142,6 +163,7 @@
   </section>
 
   <!-- 月合計（前月比も表示） -->
+  <!-- JSが「合計の数値」を計算してこの中に入れる -->
   <section class="section card">
     <h2 class="section-title">月合計</h2>
     <!-- 月合計の中身はJSで生成する -->
@@ -151,6 +173,7 @@
   </section>
 
   <!-- 記録一覧テーブル（削除は2段階確認） -->
+  <!-- テーブルは横スクロール可能（スマホで見切れてもOK） -->
   <section class="section card">
     <h2 class="section-title">記録一覧</h2>
     <p class="section-note">削除ボタンは2回タップで確定（誤削除防止）</p>
@@ -181,6 +204,7 @@
   </div><!-- /#viewHome -->
 
   <!-- 設定画面 -->
+  <!-- ホーム画面とは別の「画面」。JSで表示/非表示を切り替える -->
   <div class="view view-settings" id="viewSettings">
     <section class="section card">
       <h2 class="section-title">設定</h2>
@@ -229,6 +253,12 @@
       <button class="btn-secondary btn-full" id="saveDeduction">リース額を保存</button>
     </section>
 
+    <!-- 休日設定 -->
+    <section class="section card">
+      <h2 class="section-title">休日設定</h2>
+      <p class="section-note">カレンダーの対象日を2秒間長押しで休日を登録・解除できます。</p>
+    </section>
+
     <section class="section card">
       <h2 class="section-title">表示モード</h2>
       <div class="theme-toggle">
@@ -239,6 +269,7 @@
   </div><!-- /#viewSettings -->
 
   <!-- 年間グラフ画面 -->
+  <!-- JSが棒グラフを描画するエリア -->
   <div class="view view-annual" id="viewAnnual">
     <section class="section card">
       <h2 class="section-title">年間グラフ</h2>
@@ -257,11 +288,13 @@
 </div><!-- /#app -->
 
 <!-- 画面下部に固定される保存ボタン -->
+<!-- いつでも保存できるように固定してある -->
 <div class="save-bar">
   <button class="btn-primary" id="saveRecord">この日に記録</button>
 </div>
 
 <!-- 年月ピッカーモーダル（年月を直接選ぶ） -->
+<!-- モーダル = 画面の上に重ねて出す小さな画面 -->
 <div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true">
   <!-- 画面の暗い背景（クリックで閉じる） -->
   <div class="modal-overlay" id="pickerOverlay"></div>
@@ -279,6 +312,7 @@
 </div>
 
 <!-- 日別詳細モーダル（その日の内訳を見る） -->
+<!-- カレンダーで同じ日を再タップすると開く -->
 <div id="memoModal" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal-overlay" id="memoOverlay"></div>
   <div class="modal-content">
@@ -291,6 +325,7 @@
 </div>
 
 <!-- 保存確認モーダル -->
+<!-- 保存前に「本当に保存するか」を確認する -->
 <div id="saveConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
   <div class="modal-overlay" id="saveConfirmOverlay"></div>
   <div class="modal-content">
@@ -304,7 +339,21 @@
   </div>
 </div>
 
+<!-- 汎用ポップアップ（メッセージ/確認） -->
+<div id="alertModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
+  <div class="modal-overlay" id="alertOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="alertTitle">お知らせ</h3>
+    <p class="section-note" id="alertMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="alertCancel">キャンセル</button>
+      <button class="btn-primary" id="alertOk">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- メニュー（ホーム/設定/年間グラフ） -->
+<!-- ハンバーガーを押すと出る一覧 -->
 <div id="menuModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
   <div class="modal-overlay" id="menuOverlay"></div>
   <div class="modal-content">

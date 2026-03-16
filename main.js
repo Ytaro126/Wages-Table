@@ -51,13 +51,24 @@ const STORAGE_KEY = "delivery-wage-app-v1";
  *               既存レコードの mode は変更しない（過去記録は固定）
  */
 let state = {
+  // records は「日別データの一覧」。配列で持つ。
   records:           [],
+  // currentMode は「新しく記録するときのモード」
   currentMode:       null,       // ① フォームで選択中のモード
+  // monthlyDeductions は「月ごとの控除額」
   monthlyDeductions: {},
+  // holidays は「休日に設定した日」。{ 'YYYY-MM-DD': true }
+  holidays:          {},
+  // lastMorningGreeting は「朝の挨拶を出した日」
+  lastMorningGreeting: null,
+  // selectedDate は「今選択している日」
   selectedDate:      null,
+  // viewYear / viewMonth は「カレンダーに表示中の年月」
   viewYear:          new Date().getFullYear(),
   viewMonth:         new Date().getMonth(),
+  // theme は「ダーク/ライト」
   theme:             'dark',
+  // chartYear は「年間グラフの対象年」
   chartYear:         new Date().getFullYear(),
 };
 
@@ -68,6 +79,7 @@ let state = {
 /** 機能1 金額（税抜） */
 function calcFeature1(count) {
   // 80以下は一律14,000円。81以上は超過分×110円を加算。
+  // count は「配達数」
   if (count <= 80) return 14000;
   return 14000 + (count - 80) * 110;
 }
@@ -75,12 +87,14 @@ function calcFeature1(count) {
 /** 税込計算（10%加算、端数は四捨五入） */
 function addTax(value) {
   // 税込は税抜×1.1。Math.roundで四捨五入。
+  // 例: 1000 → 1100
   return Math.round(value * 1.1);
 }
 
 /** レコードの税抜合計 */
 function calcRecordTaxEx(rec) {
   // 計算モードで配達単価が変わる
+  // rec は「1日の記録オブジェクト」
   let base = 0;
   if (rec.mode === 'feature1') base = calcFeature1(rec.count);
   else if (rec.mode === 'feature2') base = rec.count * 150;
@@ -93,6 +107,7 @@ function calcRecordTaxEx(rec) {
 /** レコードの税込合計 */
 function calcRecordTaxIn(rec) {
   // 税込側は機能1のみ10%加算が必要
+  // feature2/3 は単価が税込として固定されている
   let base = 0;
   if (rec.mode === 'feature1') base = addTax(calcFeature1(rec.count));
   else if (rec.mode === 'feature2') base = rec.count * 165;
@@ -105,6 +120,7 @@ function calcRecordTaxIn(rec) {
 /** 指定年月のレコード配列を返す */
 function getMonthRecords(year, month) {
   // YYYY-MM の接頭辞でフィルタする
+  // 例: 2026-03 のデータだけ取り出す
   const prefix = toMonthKey(year, month);
   return state.records.filter(r => r.date.startsWith(prefix));
 }
@@ -170,6 +186,9 @@ function loadState() {
     const saved = JSON.parse(raw);
     // スプレッド構文 { ...a, ...b } でオブジェクトを合体
     state = { ...state, ...saved };
+    // 新しい項目が無い場合に備えて初期化
+    if (!state.holidays) state.holidays = {};
+    if (!state.lastMorningGreeting) state.lastMorningGreeting = null;
 
     // ① 旧バージョンとの互換性: feature1Enabled/feature2Enabled → currentMode に移行
     if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
@@ -220,10 +239,12 @@ function renderCalendar() {
     // dateStr はデータ検索用のキー
     const dateStr = toDateStr(viewYear, viewMonth, d);
     const rec     = state.records.find(r => r.date === dateStr);
+    const isHoliday = !!state.holidays[dateStr];
 
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (dateStr === selectedDate) cell.classList.add('selected');
+    if (isHoliday) cell.classList.add('holiday');
 
     // 日付番号
     const dayNum = document.createElement('span');
@@ -249,6 +270,13 @@ function renderCalendar() {
       amountDiv.appendChild(exSpan);
 
       cell.appendChild(amountDiv);
+    }
+
+    if (isHoliday) {
+      const holidayBadge = document.createElement('span');
+      holidayBadge.className = 'cal-holiday-badge';
+      holidayBadge.textContent = '休日';
+      cell.appendChild(holidayBadge);
     }
 
     // セルタップ時の動作
@@ -281,11 +309,20 @@ function syncFormFromSelectedDate() {
   document.getElementById('selectedDateDisplay').value = selectedDate || '';
 
   const rec = selectedDate ? state.records.find(r => r.date === selectedDate) : null;
+  const isHoliday = selectedDate ? isHolidayDate(selectedDate) : false;
 
   document.getElementById('inputCount').value    = rec ? rec.count       : '';
   document.getElementById('inputCount170').value = rec ? rec.count170    : '';
   document.getElementById('inputPickup').value   = rec ? rec.pickupCount : '';
   document.getElementById('inputOther').value    = rec ? rec.otherIncome : '';
+
+  // 勤務日/休日の表示を更新
+  const workRadio = document.getElementById('workdayWork');
+  const holidayRadio = document.getElementById('workdayHoliday');
+  if (workRadio && holidayRadio) {
+    if (isHoliday) holidayRadio.checked = true;
+    else workRadio.checked = true;
+  }
 
   // 既存レコードのモードは「その記録だけ」のもの。
   // 設定で選んだ currentMode は変更しない（過去記録が勝手に変わらないようにする）。
@@ -341,6 +378,7 @@ function updatePreview() {
   }
 
   // 入力値を読み取って、仮レコードを作る
+  // まだ保存していないので、画面表示用の一時データ
   const mockRec = {
     count,
     count170,
@@ -520,6 +558,7 @@ function renderDeductionInput() {
 /** 全体を再描画する */
 function renderAll() {
   // 画面全体の表示をまとめて更新
+  // 「1つずつ更新」を全部ここで呼ぶと管理しやすい
   renderCalendar();
   renderMonthlyTotals();
   renderTable();
@@ -530,9 +569,11 @@ function renderAll() {
 
 // 画面切り替え（ホーム/設定/年間グラフ）
 function showView(name) {
+  // name は 'Home' / 'Settings' / 'Annual'
   ['viewHome', 'viewSettings', 'viewAnnual'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
+    // active クラスが付いている画面だけ表示される
     el.classList.toggle('active', id === `view${name}`);
   });
 
@@ -552,6 +593,7 @@ function closeMenu() {
 }
 
 function applyTheme(theme) {
+  // body にクラスを付け替えて見た目を切り替える
   state.theme = theme;
   document.body.classList.toggle('theme-light', theme === 'light');
   saveState();
@@ -696,6 +738,20 @@ function setupEvents() {
     saveRecord();
   });
 
+  // ── 汎用ポップアップ ──
+  ['alertOverlay', 'alertCancel'].forEach(id => {
+    bind(id, 'click', () => {
+      const handler = alertCancelHandler;
+      closeAlert();
+      if (handler) handler();
+    });
+  });
+  bind('alertOk', 'click', () => {
+    const handler = alertOkHandler;
+    closeAlert();
+    if (handler) handler();
+  });
+
   // ── ① モードラジオボタン ──
   document.querySelectorAll('input[name="mode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
@@ -799,6 +855,28 @@ function saveRecord() {
     return;
   }
 
+  // 勤務日/休日の取得
+  const isHoliday = document.getElementById('workdayHoliday')?.checked;
+
+  // 休日なら「記録しない」で保存（休日登録だけ行う）
+  if (isHoliday) {
+    if (state.selectedDate) {
+      state.holidays[state.selectedDate] = true;
+      // もし同日レコードがあれば削除（休日に切り替えるため）
+      state.records = state.records.filter(r => r.date !== state.selectedDate);
+      saveState();
+      renderAll();
+      showMessage('休日として保存しました', 'success', 'formMessage');
+    }
+    return;
+  } else {
+    // 出勤日に戻す場合は休日解除
+    if (state.selectedDate) {
+      delete state.holidays[state.selectedDate];
+    }
+  }
+
+  // 入力欄から値を集めて「1日分のデータ」を作る
   const newRecord = {
     date:        state.selectedDate,
     count:       parseInputInt('inputCount'),
@@ -809,6 +887,7 @@ function saveRecord() {
   };
 
   // 既存レコードがあれば上書き、なければ追加
+  // findIndex は「条件に合う最初の場所（番号）」を探す
   const idx = state.records.findIndex(r => r.date === state.selectedDate);
   if (idx >= 0) state.records[idx] = newRecord;
   else          state.records.push(newRecord);
@@ -816,13 +895,29 @@ function saveRecord() {
   saveState();
   renderAll();
   showMessage('保存しました', 'success', 'formMessage');
+
+  // 19時以降の労いメッセージ
+  const now = new Date();
+  const totalCount = newRecord.count + newRecord.count170;
+  if (now.getHours() >= 19 && totalCount > 0) {
+    const nextDate = new Date(state.selectedDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const nextKey = toDateStr(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
+    if (!isHolidayDate(nextKey)) {
+      showAlert('本日もお疲れ様でした！明日も無理なく安全運転で頑張って下さい！');
+    } else {
+      const nextWork = getNextWorkDate(nextKey);
+      const n = parseInt(nextWork.split('-')[2], 10);
+      showAlert(`本日もお疲れ様でした！次は${n}日（休日を除く直近の出勤日をnとします）ですね！明日はゆっくり休んで${n}日は寝坊せずにお気をつけ下さい！`);
+    }
+  }
 }
 
 /**
  * 保存確認モーダルを開く
  * 入力内容を見せて「保存」か「キャンセル」を選ばせる
  */
-function openSaveConfirm() {
+function openSaveConfirm(skipExistingCheck = false) {
   clearMessage('formMessage');
 
   if (!state.selectedDate) {
@@ -833,6 +928,38 @@ function openSaveConfirm() {
   if (!mode) {
     showMessage('計算モード（日給保証 / 単価150 / 単価160）を選択してください', 'error', 'formMessage');
     return;
+  }
+
+  // 勤務日/休日の判定（休日なら保存確認をスキップ）
+  const isHoliday = document.getElementById('workdayHoliday')?.checked;
+  if (isHoliday) {
+    showAlert('休日登録します。よろしいですか？', {
+      showCancel: true,
+      okText: '登録する',
+      cancelText: 'キャンセル',
+      onOk: () => {
+        state.holidays[state.selectedDate] = true;
+        state.records = state.records.filter(r => r.date !== state.selectedDate);
+        saveState();
+        renderAll();
+        showMessage('休日として保存しました', 'success', 'formMessage');
+      },
+    });
+    return;
+  }
+
+  // 既に記録がある日なら、上書き確認を出す
+  if (!skipExistingCheck) {
+    const exists = state.records.some(r => r.date === state.selectedDate);
+    if (exists) {
+      showAlert('すでに記録されています。修正しますか？', {
+        showCancel: true,
+        okText: '修正する',
+        cancelText: 'キャンセル',
+        onOk: () => openSaveConfirm(true),
+      });
+      return;
+    }
   }
 
   const preview = {
@@ -1024,8 +1151,10 @@ function renderAnnualChart(year) {
  */
 function setupSwipe() {
   // 指の動きに追従し、40%超えでスライド
+  // ここは「スワイプ操作」を一箇所にまとめた関数
   const wrapper = document.getElementById('calendarSwipe');
   if (!wrapper) return;
+  // 開始位置・移動量・状態を保存する変数たち
   let startX = 0, startY = 0;
   let dx = 0;
   let dragging = false;
@@ -1036,9 +1165,12 @@ function setupSwipe() {
   let isAnimating = false;
 
   const setTranslate = (x) => {
+    // translate3d は「要素を横に動かす」ための指定
     wrapper.style.transform = `translate3d(${x}px, 0, 0)`;
   };
   const requestMove = (x) => {
+    // requestAnimationFrame を使うと「描画タイミング」で動かせる
+    // 連続で呼ばれても、1フレームに1回だけ動かす
     pendingX = x;
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
@@ -1048,39 +1180,54 @@ function setupSwipe() {
   };
 
   const onStart = (clientX, clientY, pointerId) => {
+    // スワイプ開始時の処理
     if (isAnimating) return;
     startX = clientX;
     startY = clientY;
     dx = 0;
     dragging = false;
+    // 画面幅を取って「40%判定」に使う
     width = wrapper.getBoundingClientRect().width || 1;
     activePointerId = pointerId;
+    // ドラッグ中はアニメーションを切る
     wrapper.style.transition = 'none';
   };
 
   const onMove = (clientX, clientY) => {
+    // スワイプ中の処理
     dx = clientX - startX;
     const dy = clientY - startY;
     if (!dragging) {
+      // 小さい動きは無視（誤操作防止）
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return false;
+      // 縦スクロール優先にしたいので、横より縦が大きければ無視
       if (Math.abs(dx) <= Math.abs(dy)) return false;
       dragging = true;
     }
+    // 指の動きに合わせて横へ移動
     requestMove(dx);
     return true;
   };
 
   const onEnd = () => {
+    // 指を離した時の処理
     if (activePointerId === null) return;
+    // どれだけ動いたかを割合で計算
     const ratio = Math.abs(dx) / width;
+    // 左にスワイプなら翌月（+1）、右なら前月（-1）
     const dir = dx < 0 ? 1 : -1;
+    // 40%を超えたら「月を切り替える」
     const shouldSlide = dragging && ratio >= 0.4;
 
+    // 指を離したあとはアニメーションでスライド
     wrapper.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
     if (shouldSlide) {
+      // 既にrequestAnimationFrameが残っていれば止める
       if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      // 画面幅ぶんだけ一気に動かして「スライド完了」させる
       setTranslate(dx < 0 ? -width : width);
       isAnimating = true;
+      // transitionend が来ない時の保険（安全に戻す）
       const fallback = setTimeout(() => {
         wrapper.style.transition = '';
         wrapper.style.transform = '';
@@ -1091,9 +1238,11 @@ function setupSwipe() {
         wrapper.style.transition = '';
         wrapper.style.transform = '';
         isAnimating = false;
+        // アニメーションが終わったら月を切り替えて描画し直す
         goMonth(dir, false);
       }, { once: true });
     } else {
+      // 40%未満なら元の位置に戻す
       if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       setTranslate(0);
       wrapper.addEventListener('transitionend', () => {
@@ -1101,23 +1250,29 @@ function setupSwipe() {
         wrapper.style.transform = '';
       }, { once: true });
     }
+    // 次のスワイプに備えて状態をリセット
     activePointerId = null;
     dragging = false;
   };
 
+  // Pointer Events が使えるかどうか判定
   const hasPointer = !!window.PointerEvent;
 
   if (hasPointer) {
     // Pointer Events（iOS 13+）
     wrapper.addEventListener('pointerdown', (e) => {
+      // マウス右クリックは無視
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // この指（ポインタ）を追跡する宣言
       wrapper.setPointerCapture?.(e.pointerId);
       onStart(e.clientX, e.clientY, e.pointerId);
     }, { passive: true });
 
     wrapper.addEventListener('pointermove', (e) => {
+      // 今追跡している指以外は無視
       if (activePointerId !== e.pointerId) return;
       const moved = onMove(e.clientX, e.clientY);
+      // 画面スクロールを止めて横スワイプを優先
       if (moved) e.preventDefault();
     }, { passive: false });
 
@@ -1131,6 +1286,7 @@ function setupSwipe() {
     }, { passive: true });
 
     window.addEventListener('pointerup', (e) => {
+      // 指が要素の外で離れても拾えるようにする
       if (activePointerId !== null && activePointerId === e.pointerId) onEnd();
     }, { passive: true });
     window.addEventListener('pointercancel', () => {
@@ -1212,6 +1368,78 @@ function showMessage(text, type, targetId) {
   }, 2000);
 }
 
+/* ────────────────────────────────────────────────────────────
+   8. 休日・ポップアップ関連
+──────────────────────────────────────────────────────────── */
+
+function toggleHoliday(dateStr) {
+  // 休日のON/OFFを切り替える
+  if (state.holidays[dateStr]) delete state.holidays[dateStr];
+  else state.holidays[dateStr] = true;
+  saveState();
+  renderCalendar();
+}
+
+function isHolidayDate(dateStr) {
+  return !!state.holidays[dateStr];
+}
+
+function getNextWorkDate(fromDateStr) {
+  // 翌日から「休日ではない日」を探す
+  const base = new Date(fromDateStr);
+  for (let i = 1; i <= 366; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    const key = toDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    if (!isHolidayDate(key)) return key;
+  }
+  return fromDateStr;
+}
+
+let alertOkHandler = null;
+let alertCancelHandler = null;
+
+function showAlert(message, options = {}) {
+  const modal = document.getElementById('alertModal');
+  const msgEl = document.getElementById('alertMessage');
+  const okBtn = document.getElementById('alertOk');
+  const cancelBtn = document.getElementById('alertCancel');
+  if (!modal || !msgEl || !okBtn || !cancelBtn) return;
+
+  msgEl.textContent = message;
+  okBtn.textContent = options.okText || 'OK';
+  cancelBtn.textContent = options.cancelText || 'キャンセル';
+  cancelBtn.style.display = options.showCancel ? 'inline-flex' : 'none';
+
+  alertOkHandler = options.onOk || null;
+  alertCancelHandler = options.onCancel || null;
+
+  modal.classList.remove('hidden');
+}
+
+function closeAlert() {
+  const modal = document.getElementById('alertModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  alertOkHandler = null;
+  alertCancelHandler = null;
+}
+
+function showMorningGreetingOnce() {
+  const now = new Date();
+  if (now.getHours() < 6) return;
+  const todayKey = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+  if (state.lastMorningGreeting === todayKey) return;
+
+  if (isHolidayDate(todayKey)) {
+    showAlert('おはようございます！本日はお休みです、間違えて出勤しないようお気をつけ下さい！');
+  } else {
+    showAlert('おはようございます！本日も安全運転でお気をつけて！');
+  }
+  state.lastMorningGreeting = todayKey;
+  saveState();
+}
+
 /** メッセージをクリアする */
 function clearMessage(targetId) {
   // メッセージ表示を消す
@@ -1245,6 +1473,7 @@ function init() {
   setupEvents();
   renderAll();
   showView('Home');
+  showMorningGreetingOnce();
 }
 
 document.addEventListener('DOMContentLoaded', init);
