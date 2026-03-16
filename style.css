@@ -158,7 +158,10 @@ body {
 
 /* スワイプアニメーション */
 /* will-change はアニメーションの滑らかさを上げるヒント */
-.calendar-swipe-wrapper { will-change: transform, opacity; }
+.calendar-swipe-wrapper {
+  will-change: transform, opacity;
+  touch-action: pan-y;
+}
 
 @keyframes slideFromRight {
   from { transform: translateX(1.5rem); opacity: 0.4; }

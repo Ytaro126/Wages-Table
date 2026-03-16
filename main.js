@@ -996,22 +996,102 @@ function renderAnnualChart(year) {
  * 水平移動が垂直移動より大きく、かつ50px以上でスワイプと判定
  */
 function setupSwipe() {
-  // 指の移動量から左右スワイプを判定する
+  // 指の動きに追従し、40%超えでスライド
   const wrapper = document.getElementById('calendarSwipe');
+  if (!wrapper) return;
   let startX = 0, startY = 0;
+  let dx = 0;
+  let dragging = false;
+  let width = 1;
+  let activePointerId = null;
 
-  wrapper.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
+  const setTranslate = (x) => {
+    wrapper.style.transform = `translate3d(${x}px, 0, 0)`;
+  };
+
+  const onStart = (clientX, clientY, pointerId) => {
+    startX = clientX;
+    startY = clientY;
+    dx = 0;
+    dragging = false;
+    width = wrapper.getBoundingClientRect().width || 1;
+    activePointerId = pointerId;
+    wrapper.style.transition = 'none';
+  };
+
+  const onMove = (clientX, clientY) => {
+    dx = clientX - startX;
+    const dy = clientY - startY;
+    if (!dragging) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return false;
+      if (Math.abs(dx) <= Math.abs(dy)) return false;
+      dragging = true;
+    }
+    setTranslate(dx);
+    return true;
+  };
+
+  const onEnd = () => {
+    if (activePointerId === null) return;
+    const ratio = Math.abs(dx) / width;
+    const dir = dx < 0 ? 1 : -1;
+    const shouldSlide = dragging && ratio >= 0.4;
+
+    wrapper.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
+    if (shouldSlide) {
+      setTranslate(dx < 0 ? -width : width);
+      wrapper.addEventListener('transitionend', () => {
+        wrapper.style.transition = '';
+        wrapper.style.transform = '';
+        goMonth(dir, false);
+      }, { once: true });
+    } else {
+      setTranslate(0);
+      wrapper.addEventListener('transitionend', () => {
+        wrapper.style.transition = '';
+        wrapper.style.transform = '';
+      }, { once: true });
+    }
+    activePointerId = null;
+    dragging = false;
+  };
+
+  // Pointer Events（iOS 13+）
+  wrapper.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    wrapper.setPointerCapture?.(e.pointerId);
+    onStart(e.clientX, e.clientY, e.pointerId);
   }, { passive: true });
 
-  wrapper.addEventListener('touchend', (e) => {
-    // 横移動が縦移動より大きい場合だけ月移動
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      goMonth(dx < 0 ? 1 : -1);
-    }
+  wrapper.addEventListener('pointermove', (e) => {
+    if (activePointerId !== e.pointerId) return;
+    const moved = onMove(e.clientX, e.clientY);
+    if (moved) e.preventDefault();
+  }, { passive: false });
+
+  wrapper.addEventListener('pointerup', (e) => {
+    if (activePointerId !== e.pointerId) return;
+    onEnd();
+  }, { passive: true });
+
+  wrapper.addEventListener('pointercancel', () => {
+    onEnd();
+  }, { passive: true });
+
+  // フォールバック（古い環境）
+  wrapper.addEventListener('touchstart', (e) => {
+    if (!e.touches[0]) return;
+    onStart(e.touches[0].clientX, e.touches[0].clientY, 'touch');
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (!e.touches[0]) return;
+    const moved = onMove(e.touches[0].clientX, e.touches[0].clientY);
+    if (moved) e.preventDefault();
+  }, { passive: false });
+
+  wrapper.addEventListener('touchend', () => {
+    onEnd();
   }, { passive: true });
 }
 
