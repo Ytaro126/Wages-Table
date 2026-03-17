@@ -111,8 +111,9 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 保存データを取得
-app.get('/api/state', authMiddleware, async (req, res) => {
-  const row = await db.get('SELECT state_json FROM states WHERE user_id = ?', [req.user.uid]);
+// 保存データを取得（ログイン無しの単一ユーザー想定）
+app.get('/api/state', async (req, res) => {
+  const row = await db.get('SELECT state_json FROM states WHERE user_id = ?', [1]);
   if (!row) return res.json({ state: null });
   try {
     return res.json({ state: JSON.parse(row.state_json) });
@@ -122,7 +123,8 @@ app.get('/api/state', authMiddleware, async (req, res) => {
 });
 
 // 保存データを更新
-app.put('/api/state', authMiddleware, async (req, res) => {
+// 保存データを更新（ログイン無しの単一ユーザー想定）
+app.put('/api/state', async (req, res) => {
   const state = req.body?.state;
   if (!state || typeof state !== 'object') return res.status(400).json({ error: 'invalid' });
   const now = new Date().toISOString();
@@ -131,7 +133,7 @@ app.put('/api/state', authMiddleware, async (req, res) => {
     `INSERT INTO states (user_id, state_json, updated_at)
      VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at`,
-    [req.user.uid, json, now]
+    [1, json, now]
   );
   return res.json({ ok: true });
 });

@@ -173,8 +173,18 @@ function calcMonthlyTotals(year, month) {
    3. 保存・読み込み系
 ──────────────────────────────────────────────────────────── */
 
-function saveState() {
-  // ローカルに保存（ログイン中ユーザーごとに分ける）
+async function saveState() {
+  // まずサーバーへ保存を試す
+  try {
+    const res = await fetch('/api/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state }),
+    });
+    if (res.ok) return;
+  } catch (e) {
+    // サーバーが落ちている等の場合はローカルに退避
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -182,7 +192,30 @@ function saveState() {
   }
 }
 
-function loadState() {
+async function loadState() {
+  // まずサーバーから読み込みを試す
+  try {
+    const res = await fetch('/api/state');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.state) {
+        const base = defaultState();
+        const saved = data.state;
+        state = {
+          ...base,
+          ...saved,
+          monthlyDeductions: saved.monthlyDeductions || base.monthlyDeductions,
+          holidays: saved.holidays || base.holidays,
+        };
+        if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
+        else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
+        return;
+      }
+    }
+  } catch (e) {
+    // サーバー未到達ならローカルにフォールバック
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
@@ -1597,13 +1630,14 @@ function setupAnnualYearOptions() {
 
 function init() {
   // 起動時に「保存読込 → テーマ反映 → イベント登録 → 描画」の順で実行
-  loadState();
   applyTheme(state.theme || 'dark');
   setupAnnualYearOptions();
   setupEvents();
-  renderAll();
-  showView('Home');
-  showMorningGreetingOnce();
+  loadState().then(() => {
+    renderAll();
+    showView('Home');
+    showMorningGreetingOnce();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

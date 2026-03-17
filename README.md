@@ -46,83 +46,24 @@ npm start
 
 ---
 
-## ログイン手順（初心者向け）
+## 構成図（AWS EC2 前提）
 
-1. サーバーを起動します  
-   ```bash
-   npm install
-   npm start
-   ```
-2. ブラウザで `http://localhost:8000` を開きます  
-3. 画面の「新規登録」でメールとパスワードを作ります  
-4. そのメールとパスワードで「ログイン」します  
-5. ログインできたらデータはサーバー側に保存されます
+```mermaid
+flowchart TD
+  U["ユーザー（iPhone / PC）"]
+  B["ブラウザ（Safari / Chrome）"]
+  EC2["AWS EC2（Ubuntu）"]
+  APP["Node.js アプリ（API + 静的配信）"]
+  DB["SQLite（同一インスタンス内）"]
 
----
-
-## API仕様（簡易）
-
-### 1. 新規登録
-`POST /api/auth/register`
-
-**リクエスト**
-```json
-{
-  "email": "example@mail.com",
-  "password": "password123"
-}
+  U --> B
+  B --> EC2
+  EC2 --> APP
+  APP --> DB
 ```
 
-**レスポンス**
-```json
-{ "id": 1 }
-```
-
-### 2. ログイン
-`POST /api/auth/login`
-
-**リクエスト**
-```json
-{
-  "email": "example@mail.com",
-  "password": "password123"
-}
-```
-
-**レスポンス**
-```json
-{ "token": "JWT_TOKEN" }
-```
-
-### 3. 保存データ取得
-`GET /api/state`
-
-**ヘッダー**
-```
-Authorization: Bearer JWT_TOKEN
-```
-
-**レスポンス**
-```json
-{ "state": { ... } }
-```
-
-### 4. 保存データ更新
-`PUT /api/state`
-
-**ヘッダー**
-```
-Authorization: Bearer JWT_TOKEN
-```
-
-**リクエスト**
-```json
-{
-  "state": { ... }
-}
-```
-
-**レスポンス**
-```json
-{ "ok": true }
-```
+### 役割のざっくり説明
+- **ブラウザ**: 画面表示と操作  
+- **EC2**: サーバーを置く場所（公開用）  
+- **Node.js**: アプリの処理・API  
+- **SQLite**: データ保存（同じサーバー内）  
