@@ -40,7 +40,8 @@
 const STORAGE_KEY = "delivery-wage-app-v1";
 // localStorageに保存するときの「箱の名前」。変えると別データ扱いになる。
 
-// ログイン機能は撤去し、単一キーで保存する
+const AUTH_TOKEN_KEY = "delivery-auth-token";
+// ログイン済みかどうかを判定するためのトークン保存キー
 
 const defaultState = () => ({
   // records は「日別データの一覧」。配列で持つ。
@@ -173,53 +174,48 @@ function calcMonthlyTotals(year, month) {
    3. 保存・読み込み系
 ──────────────────────────────────────────────────────────── */
 
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function setAuthToken(token) {
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = options.headers || {};
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) {
+    // 認証切れの場合はログアウト扱い
+    setAuthToken(null);
+    showAuthScreen();
+  }
+  return res;
+}
+
 async function saveState() {
-  // まずサーバーへ保存を試す
+  // サーバーに保存（ログイン必須）
   try {
-    const res = await fetch('/api/state', {
+    await apiFetch('/api/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state }),
     });
-    if (res.ok) return;
-  } catch (e) {
-    // サーバーが落ちている等の場合はローカルに退避
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
     console.warn('保存失敗:', e);
   }
 }
 
 async function loadState() {
-  // まずサーバーから読み込みを試す
   try {
-    const res = await fetch('/api/state');
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.state) {
-        const base = defaultState();
-        const saved = data.state;
-        state = {
-          ...base,
-          ...saved,
-          monthlyDeductions: saved.monthlyDeductions || base.monthlyDeductions,
-          holidays: saved.holidays || base.holidays,
-        };
-        if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
-        else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
-        return;
-      }
-    }
-  } catch (e) {
-    // サーバー未到達ならローカルにフォールバック
-  }
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const saved = JSON.parse(raw);
+    const res = await apiFetch('/api/state');
+    if (!res.ok) return;
+    const data = await res.json();
+    const saved = data.state;
+    if (!saved) return;
     const base = defaultState();
     state = {
       ...base,
@@ -625,6 +621,20 @@ function showView(name) {
   if (name === 'Annual') renderAnnualChart(state.chartYear);
 }
 
+function showAuthScreen() {
+  const authEl = document.getElementById('authScreen');
+  const appEl = document.getElementById('app');
+  if (authEl) authEl.classList.remove('hidden');
+  if (appEl) appEl.classList.add('hidden');
+}
+
+function showAppScreen() {
+  const authEl = document.getElementById('authScreen');
+  const appEl = document.getElementById('app');
+  if (authEl) authEl.classList.add('hidden');
+  if (appEl) appEl.classList.remove('hidden');
+}
+
 function openMenu() {
   document.getElementById('menuModal').classList.remove('hidden');
 }
@@ -763,6 +773,40 @@ function setupEvents() {
     closeMenu();
     showView('Diagnostic');
     renderDiagnostics();
+  });
+
+  // ── ログイン/ログアウト ──
+  bind('authSignIn', 'click', async () => {
+    const id = document.getElementById('authId').value.trim();
+    const pass  = document.getElementById('authPassword').value.trim();
+    if (!id || !pass) {
+      document.getElementById('authMessage').textContent = 'IDとパスワードを入力してください。';
+      return;
+    }
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, password: pass }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setAuthToken(data.token);
+      document.getElementById('authMessage').textContent = '';
+      showAppScreen();
+      state = defaultState();
+      await loadState();
+      renderAll();
+      showView('Home');
+      showMorningGreetingOnce();
+    } else {
+      document.getElementById('authMessage').textContent = 'ログインに失敗しました。';
+    }
+  });
+
+  bind('authSignOut', 'click', () => {
+    setAuthToken(null);
+    state = defaultState();
+    showAuthScreen();
   });
 
   // ── テーマ切替 ──
@@ -1633,11 +1677,18 @@ function init() {
   applyTheme(state.theme || 'dark');
   setupAnnualYearOptions();
   setupEvents();
-  loadState().then(() => {
-    renderAll();
-    showView('Home');
-    showMorningGreetingOnce();
-  });
+
+  const token = getAuthToken();
+  if (token) {
+    showAppScreen();
+    loadState().then(() => {
+      renderAll();
+      showView('Home');
+      showMorningGreetingOnce();
+    });
+  } else {
+    showAuthScreen();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);

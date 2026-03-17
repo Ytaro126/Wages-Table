@@ -54,6 +54,23 @@ async function initDb() {
       FOREIGN KEY(user_id) REFERENCES users(id)
     );
   `);
+
+  // 固定ユーザーを事前登録（Ytaro / taro）
+  const seedUsers = [
+    { id: 'Ytaro', password: 'Ytaro' },
+    { id: 'taro',  password: 'taro'  },
+  ];
+  for (const u of seedUsers) {
+    const exists = await db.get('SELECT id FROM users WHERE email = ?', [u.id]);
+    if (!exists) {
+      const hash = await bcrypt.hash(u.password, 10);
+      const now = new Date().toISOString();
+      await db.run(
+        'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)',
+        [u.id, hash, now]
+      );
+    }
+  }
 }
 
 function signToken(user) {
@@ -76,32 +93,12 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// 新規登録
-app.post('/api/auth/register', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password || password.length < 8) {
-    return res.status(400).json({ error: 'invalid' });
-  }
-  // パスワードはそのまま保存せず、ハッシュ化して保存する
-  const hash = await bcrypt.hash(password, 10);
-  try {
-    const now = new Date().toISOString();
-    const result = await db.run(
-      'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)',
-      [email, hash, now]
-    );
-    return res.json({ id: result.lastID });
-  } catch (e) {
-    return res.status(400).json({ error: 'duplicate' });
-  }
-});
-
-// ログイン
+// ログイン（ID / パスワード）
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: 'invalid' });
-  // 登録済みユーザーを探す
-  const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+  const { id, password } = req.body || {};
+  if (!id || !password) return res.status(400).json({ error: 'invalid' });
+  // 登録済みユーザーを探す（email列をIDとして使う）
+  const user = await db.get('SELECT * FROM users WHERE email = ?', [id]);
   if (!user) return res.status(401).json({ error: 'unauthorized' });
   // パスワードが一致するか確認
   const ok = await bcrypt.compare(password, user.password_hash);
@@ -111,9 +108,9 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 保存データを取得
-// 保存データを取得（ログイン無しの単一ユーザー想定）
-app.get('/api/state', async (req, res) => {
-  const row = await db.get('SELECT state_json FROM states WHERE user_id = ?', [1]);
+// 保存データを取得
+app.get('/api/state', authMiddleware, async (req, res) => {
+  const row = await db.get('SELECT state_json FROM states WHERE user_id = ?', [req.user.uid]);
   if (!row) return res.json({ state: null });
   try {
     return res.json({ state: JSON.parse(row.state_json) });
@@ -123,8 +120,8 @@ app.get('/api/state', async (req, res) => {
 });
 
 // 保存データを更新
-// 保存データを更新（ログイン無しの単一ユーザー想定）
-app.put('/api/state', async (req, res) => {
+// 保存データを更新
+app.put('/api/state', authMiddleware, async (req, res) => {
   const state = req.body?.state;
   if (!state || typeof state !== 'object') return res.status(400).json({ error: 'invalid' });
   const now = new Date().toISOString();
@@ -133,7 +130,7 @@ app.put('/api/state', async (req, res) => {
     `INSERT INTO states (user_id, state_json, updated_at)
      VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at`,
-    [1, json, now]
+    [req.user.uid, json, now]
   );
   return res.json({ ok: true });
 });

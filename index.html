@@ -32,7 +32,26 @@
   アプリ全体のラッパー要素。
   CSS側で最大幅や余白（safe-area）をここに指定する。
 -->
-<div id="app">
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <h2 class="section-title">ログイン</h2>
+    <p class="section-note">IDとパスワードでログインしてください。</p>
+    <div class="form-group">
+      <label class="form-label" for="authId">ID</label>
+      <input type="text" id="authId" class="form-input" placeholder="Ytaro / taro">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="authPassword">パスワード</label>
+      <input type="password" id="authPassword" class="form-input" placeholder="パスワード">
+    </div>
+    <div class="auth-actions">
+      <button class="btn-secondary btn-full" id="authSignIn">ログイン</button>
+    </div>
+    <p id="authMessage" class="form-message" role="alert" aria-live="polite"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
 
   <!-- ヘッダー（アプリ名を表示） -->
   <header class="header">
@@ -378,6 +397,7 @@
       <button class="btn-secondary btn-full" id="menuSettings">設定</button>
       <button class="btn-secondary btn-full" id="menuAnnual">年間グラフ</button>
       <button class="btn-secondary btn-full" id="menuDiagnostic">データ診断</button>
+      <button class="btn-secondary btn-full" id="authSignOut">ログアウト</button>
     </div>
   </div>
 </div>
