@@ -578,7 +578,7 @@ function renderAll() {
 // 画面切り替え（ホーム/設定/年間グラフ）
 function showView(name) {
   // name は 'Home' / 'Settings' / 'Annual'
-  ['viewHome', 'viewSettings', 'viewAnnual'].forEach(id => {
+  ['viewHome', 'viewSettings', 'viewAnnual', 'viewDiagnostic'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     // active クラスが付いている画面だけ表示される
@@ -726,6 +726,11 @@ function setupEvents() {
     closeMenu();
     showView('Annual');
   });
+  bind('menuDiagnostic', 'click', () => {
+    closeMenu();
+    showView('Diagnostic');
+    renderDiagnostics();
+  });
 
   // ── テーマ切替 ──
   bind('themeDark', 'click', () => applyTheme('dark'));
@@ -820,6 +825,17 @@ function setupEvents() {
     } catch {
       showAlert('データの形式が正しくありません。');
     }
+  });
+
+  bind('copyDiag', 'click', async () => {
+    const url = document.getElementById('diagUrl')?.textContent || '';
+    const keys = document.getElementById('diagKeys')?.textContent || '';
+    const legacy = document.getElementById('diagLegacy')?.textContent || '';
+    const text = `URL: ${url}\nKeys: ${keys}\nLegacyKey: ${legacy}`;
+    if (navigator.clipboard) {
+      try { await navigator.clipboard.writeText(text); } catch {}
+    }
+    showAlert('診断情報をコピーしました。');
   });
 
   // ── ① モードラジオボタン ──
@@ -1519,6 +1535,24 @@ function closeAlert() {
   modal.classList.add('hidden');
   alertOkHandler = null;
   alertCancelHandler = null;
+}
+
+function renderDiagnostics() {
+  const urlEl = document.getElementById('diagUrl');
+  const keysEl = document.getElementById('diagKeys');
+  const legacyEl = document.getElementById('diagLegacy');
+  if (urlEl) urlEl.textContent = location.href;
+  if (keysEl) {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) keys.push(k);
+    }
+    keysEl.textContent = keys.length ? keys.join(', ') : '(なし)';
+  }
+  if (legacyEl) {
+    legacyEl.textContent = localStorage.getItem(STORAGE_KEY) ? 'あり' : 'なし';
+  }
 }
 
 function showMorningGreetingOnce() {

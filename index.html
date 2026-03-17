@@ -279,6 +279,27 @@
     </section>
   </div><!-- /#viewAnnual -->
 
+  <!-- データ診断画面 -->
+  <div class="view view-diagnostic" id="viewDiagnostic">
+    <section class="section card">
+      <h2 class="section-title">データ診断</h2>
+      <p class="section-note">現在のURLと、保存されているキーを表示します。</p>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">現在のURL</div>
+        <div class="diagnostic-value" id="diagUrl"></div>
+      </div>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">localStorageのキー</div>
+        <div class="diagnostic-value" id="diagKeys"></div>
+      </div>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">`delivery-wage-app-v1` の有無</div>
+        <div class="diagnostic-value" id="diagLegacy"></div>
+      </div>
+      <button class="btn-secondary btn-full" id="copyDiag">診断情報をコピー</button>
+    </section>
+  </div>
+
 </div><!-- /#app -->
 
 <!-- 画面下部に固定される保存ボタン -->
@@ -356,6 +377,7 @@
       <button class="btn-secondary btn-full" id="menuHome">ホーム</button>
       <button class="btn-secondary btn-full" id="menuSettings">設定</button>
       <button class="btn-secondary btn-full" id="menuAnnual">年間グラフ</button>
+      <button class="btn-secondary btn-full" id="menuDiagnostic">データ診断</button>
     </div>
   </div>
 </div>
