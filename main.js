@@ -40,8 +40,10 @@
 const STORAGE_KEY = "delivery-wage-app-v1";
 // localStorageに保存するときの「箱の名前」。変えると別データ扱いになる。
 
-const AUTH_TOKEN_KEY = "delivery-auth-token";
-// ログイン済みかどうかを判定するためのトークン保存キー
+const USERS_KEY = "delivery-users";
+// ログイン用ユーザー情報の保存キー（ローカル）
+const CURRENT_USER_KEY = "delivery-current-user";
+// 現在ログイン中のユーザーを保存するキー
 
 const defaultState = () => ({
   // records は「日別データの一覧」。配列で持つ。
@@ -174,63 +176,46 @@ function calcMonthlyTotals(year, month) {
    3. 保存・読み込み系
 ──────────────────────────────────────────────────────────── */
 
-function getAuthToken() {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
-}
-
-function setAuthToken(token) {
-  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
-  else localStorage.removeItem(AUTH_TOKEN_KEY);
-}
-
-async function apiFetch(path, options = {}) {
-  const headers = options.headers || {};
-  const token = getAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(path, { ...options, headers });
-  if (res.status === 401) {
-    // 認証切れの場合はログアウト扱い
-    setAuthToken(null);
-    showAuthScreen();
-  }
-  return res;
-}
-
-async function saveState() {
-  // JSON文字列にして保存
-  // ログイン中はサーバー、未ログインならlocalStorageに保存
+function loadUsers() {
   try {
-    const token = getAuthToken();
-    if (token) {
-      await apiFetch('/api/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state }),
-      });
-    } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
+    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function getCurrentUser() {
+  return localStorage.getItem(CURRENT_USER_KEY);
+}
+
+function setCurrentUser(email) {
+  if (email) localStorage.setItem(CURRENT_USER_KEY, email);
+  else localStorage.removeItem(CURRENT_USER_KEY);
+}
+
+function getUserStateKey() {
+  const email = getCurrentUser();
+  return email ? `${STORAGE_KEY}:${email}` : STORAGE_KEY;
+}
+
+function saveState() {
+  // ローカルに保存（ログイン中ユーザーごとに分ける）
+  try {
+    localStorage.setItem(getUserStateKey(), JSON.stringify(state));
   } catch (e) {
     console.warn('保存失敗:', e);
   }
 }
 
-async function loadState() {
+function loadState() {
   try {
-    const token = getAuthToken();
-    let saved = null;
-    if (token) {
-      const res = await apiFetch('/api/state');
-      if (res.ok) {
-        const data = await res.json();
-        saved = data.state || null;
-      }
-    } else {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) saved = JSON.parse(raw);
-    }
-    if (!saved) return;
-
+    const raw = localStorage.getItem(getUserStateKey());
+    if (!raw) return;
+    const saved = JSON.parse(raw);
     const base = defaultState();
     state = {
       ...base,
@@ -238,8 +223,6 @@ async function loadState() {
       monthlyDeductions: saved.monthlyDeductions || base.monthlyDeductions,
       holidays: saved.holidays || base.holidays,
     };
-
-    // ① 旧バージョンとの互換性: feature1Enabled/feature2Enabled → currentMode に移行
     if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
     else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
   } catch (e) {
@@ -856,24 +839,20 @@ function setupEvents() {
       document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
       return;
     }
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setAuthToken(data.token);
-      document.getElementById('authMessage').textContent = '';
-      showAppScreen();
-      state = defaultState();
-      await loadState();
-      renderAll();
-      showView('Home');
-      showMorningGreetingOnce();
-    } else {
+    const users = loadUsers();
+    const user = users.find(u => u.email === email && u.password === pass);
+    if (!user) {
       document.getElementById('authMessage').textContent = 'ログインに失敗しました。';
+      return;
     }
+    setCurrentUser(email);
+    document.getElementById('authMessage').textContent = '';
+    showAppScreen();
+    state = defaultState();
+    loadState();
+    renderAll();
+    showView('Home');
+    showMorningGreetingOnce();
   });
 
   bind('authSignUp', 'click', async () => {
@@ -883,20 +862,22 @@ function setupEvents() {
       document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
       return;
     }
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass }),
-    });
-    if (res.ok) {
-      document.getElementById('authMessage').textContent = '新規登録しました。続けてログインしてください。';
-    } else {
-      document.getElementById('authMessage').textContent = '新規登録に失敗しました。';
+    if (pass.length < 8) {
+      document.getElementById('authMessage').textContent = 'パスワードは8文字以上にしてください。';
+      return;
     }
+    const users = loadUsers();
+    if (users.some(u => u.email === email)) {
+      document.getElementById('authMessage').textContent = 'そのメールは既に登録されています。';
+      return;
+    }
+    users.push({ email, password: pass });
+    saveUsers(users);
+    document.getElementById('authMessage').textContent = '新規登録しました。続けてログインしてください。';
   });
 
   bind('authSignOut', 'click', async () => {
-    setAuthToken(null);
+    setCurrentUser(null);
     state = defaultState();
     showAuthScreen();
   });
@@ -1647,14 +1628,13 @@ function init() {
   setupEvents();
 
   // ログイン済みならアプリを開く
-  const token = getAuthToken();
-  if (token) {
+  const user = getCurrentUser();
+  if (user) {
     showAppScreen();
-    loadState().then(() => {
-      renderAll();
-      showView('Home');
-      showMorningGreetingOnce();
-    });
+    loadState();
+    renderAll();
+    showView('Home');
+    showMorningGreetingOnce();
   } else {
     showAuthScreen();
   }
