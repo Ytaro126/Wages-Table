@@ -40,17 +40,10 @@
 const STORAGE_KEY = "delivery-wage-app-v1";
 // localStorageに保存するときの「箱の名前」。変えると別データ扱いになる。
 
-/**
- * アプリの状態
- *
- * records: 日別データの配列
- * 例:
- * { date: '2026-03-12', count: 80, count170: 2, pickupCount: 1, otherIncome: 0, mode: 'feature1' }
- *
- * currentMode : 設定画面で選ぶ「新規記録のモード」（'feature1'|'feature2'|'feature3'|null）
- *               既存レコードの mode は変更しない（過去記録は固定）
- */
-let state = {
+const AUTH_TOKEN_KEY = "delivery-auth-token";
+// ログイン済みかどうかを判定するためのトークン保存キー
+
+const defaultState = () => ({
   // records は「日別データの一覧」。配列で持つ。
   records:           [],
   // currentMode は「新しく記録するときのモード」
@@ -70,7 +63,19 @@ let state = {
   theme:             'dark',
   // chartYear は「年間グラフの対象年」
   chartYear:         new Date().getFullYear(),
-};
+});
+
+/**
+ * アプリの状態
+ *
+ * records: 日別データの配列
+ * 例:
+ * { date: '2026-03-12', count: 80, count170: 2, pickupCount: 1, otherIncome: 0, mode: 'feature1' }
+ *
+ * currentMode : 設定画面で選ぶ「新規記録のモード」（'feature1'|'feature2'|'feature3'|null）
+ *               既存レコードの mode は変更しない（過去記録は固定）
+ */
+let state = defaultState();
 
 /* ────────────────────────────────────────────────────────────
    2. 計算系関数
@@ -169,31 +174,74 @@ function calcMonthlyTotals(year, month) {
    3. 保存・読み込み系
 ──────────────────────────────────────────────────────────── */
 
-function saveState() {
-  // JSON文字列にしてlocalStorageへ保存
-  // localStorage は「ブラウザ内のメモ帳」のようなもの
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  catch (e) { console.warn('保存失敗:', e); }
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-function loadState() {
-  // 保存がなければ何もしない
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return;
+function setAuthToken(token) {
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = options.headers || {};
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) {
+    // 認証切れの場合はログアウト扱い
+    setAuthToken(null);
+    showAuthScreen();
+  }
+  return res;
+}
+
+async function saveState() {
+  // JSON文字列にして保存
+  // ログイン中はサーバー、未ログインならlocalStorageに保存
   try {
-    // 文字列 → オブジェクト
-    // JSON.parse は「文字列をデータに戻す」関数
-    const saved = JSON.parse(raw);
-    // スプレッド構文 { ...a, ...b } でオブジェクトを合体
-    state = { ...state, ...saved };
-    // 新しい項目が無い場合に備えて初期化
-    if (!state.holidays) state.holidays = {};
-    if (!state.lastMorningGreeting) state.lastMorningGreeting = null;
+    const token = getAuthToken();
+    if (token) {
+      await apiFetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state }),
+      });
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  } catch (e) {
+    console.warn('保存失敗:', e);
+  }
+}
+
+async function loadState() {
+  try {
+    const token = getAuthToken();
+    let saved = null;
+    if (token) {
+      const res = await apiFetch('/api/state');
+      if (res.ok) {
+        const data = await res.json();
+        saved = data.state || null;
+      }
+    } else {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) saved = JSON.parse(raw);
+    }
+    if (!saved) return;
+
+    const base = defaultState();
+    state = {
+      ...base,
+      ...saved,
+      monthlyDeductions: saved.monthlyDeductions || base.monthlyDeductions,
+      holidays: saved.holidays || base.holidays,
+    };
 
     // ① 旧バージョンとの互換性: feature1Enabled/feature2Enabled → currentMode に移行
     if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
     else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
-    // 旧キーは使わない（saveState で上書きされる）
   } catch (e) {
     console.error('データ読み込み失敗:', e);
   }
@@ -590,6 +638,20 @@ function showView(name) {
   if (name === 'Annual') renderAnnualChart(state.chartYear);
 }
 
+function showAuthScreen() {
+  const authEl = document.getElementById('authScreen');
+  const appEl = document.getElementById('app');
+  if (authEl) authEl.classList.remove('hidden');
+  if (appEl) appEl.classList.add('hidden');
+}
+
+function showAppScreen() {
+  const authEl = document.getElementById('authScreen');
+  const appEl = document.getElementById('app');
+  if (authEl) authEl.classList.add('hidden');
+  if (appEl) appEl.classList.remove('hidden');
+}
+
 function openMenu() {
   document.getElementById('menuModal').classList.remove('hidden');
 }
@@ -784,6 +846,59 @@ function setupEvents() {
     const handler = alertOkHandler;
     closeAlert();
     if (handler) handler();
+  });
+
+  // ── 認証（ログイン/新規登録/ログアウト） ──
+  bind('authSignIn', 'click', async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const pass  = document.getElementById('authPassword').value.trim();
+    if (!email || !pass) {
+      document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
+      return;
+    }
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setAuthToken(data.token);
+      document.getElementById('authMessage').textContent = '';
+      showAppScreen();
+      state = defaultState();
+      await loadState();
+      renderAll();
+      showView('Home');
+      showMorningGreetingOnce();
+    } else {
+      document.getElementById('authMessage').textContent = 'ログインに失敗しました。';
+    }
+  });
+
+  bind('authSignUp', 'click', async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const pass  = document.getElementById('authPassword').value.trim();
+    if (!email || !pass) {
+      document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
+      return;
+    }
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    if (res.ok) {
+      document.getElementById('authMessage').textContent = '新規登録しました。続けてログインしてください。';
+    } else {
+      document.getElementById('authMessage').textContent = '新規登録に失敗しました。';
+    }
+  });
+
+  bind('authSignOut', 'click', async () => {
+    setAuthToken(null);
+    state = defaultState();
+    showAuthScreen();
   });
 
   // ── ① モードラジオボタン ──
@@ -1526,14 +1641,23 @@ function setupAnnualYearOptions() {
 ──────────────────────────────────────────────────────────── */
 
 function init() {
-  // 起動時に「保存読込 → テーマ反映 → イベント登録 → 描画」の順で実行
-  loadState();
+  // 起動時に「テーマ反映 → イベント登録」
   applyTheme(state.theme || 'dark');
   setupAnnualYearOptions();
   setupEvents();
-  renderAll();
-  showView('Home');
-  showMorningGreetingOnce();
+
+  // ログイン済みならアプリを開く
+  const token = getAuthToken();
+  if (token) {
+    showAppScreen();
+    loadState().then(() => {
+      renderAll();
+      showView('Home');
+      showMorningGreetingOnce();
+    });
+  } else {
+    showAuthScreen();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
