@@ -213,7 +213,17 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(getUserStateKey());
+    const userKey = getUserStateKey();
+    let raw = localStorage.getItem(userKey);
+
+    // 自動移行: 旧キーのデータがあり、ユーザー別キーが空ならコピーする
+    if (!raw) {
+      const legacyRaw = localStorage.getItem(STORAGE_KEY);
+      if (legacyRaw) {
+        localStorage.setItem(userKey, legacyRaw);
+        raw = legacyRaw;
+      }
+    }
     if (!raw) return;
     const saved = JSON.parse(raw);
     const base = defaultState();
