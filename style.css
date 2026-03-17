@@ -69,29 +69,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── ログイン画面 ── */
-.auth-screen {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--pad);
-}
-.auth-card {
-  width: 100%;
-  max-width: 24rem;
-  background: var(--card-bg);
-  border: var(--card-border);
-  border-radius: var(--radius);
-  padding: var(--spacing);
-  backdrop-filter: var(--card-blur);
-  -webkit-backdrop-filter: var(--card-blur);
-}
-.auth-actions {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
+/* hidden は汎用的に使う */
 .hidden { display: none !important; }
 
 /* ── アプリラッパー ── */
@@ -538,6 +516,12 @@ body {
   background:   rgba(52, 211, 153, 0.06);
 }
 .form-input[readonly] { color: var(--text-secondary); cursor: default; }
+textarea.form-input {
+  height: auto;
+  min-height: 5.5rem;
+  padding: 0.5rem 0.875rem;
+  line-height: 1.4;
+}
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 

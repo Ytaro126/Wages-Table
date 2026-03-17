@@ -40,10 +40,7 @@
 const STORAGE_KEY = "delivery-wage-app-v1";
 // localStorageに保存するときの「箱の名前」。変えると別データ扱いになる。
 
-const USERS_KEY = "delivery-users";
-// ログイン用ユーザー情報の保存キー（ローカル）
-const CURRENT_USER_KEY = "delivery-current-user";
-// 現在ログイン中のユーザーを保存するキー
+// ログイン機能は撤去し、単一キーで保存する
 
 const defaultState = () => ({
   // records は「日別データの一覧」。配列で持つ。
@@ -176,36 +173,10 @@ function calcMonthlyTotals(year, month) {
    3. 保存・読み込み系
 ──────────────────────────────────────────────────────────── */
 
-function loadUsers() {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function getCurrentUser() {
-  return localStorage.getItem(CURRENT_USER_KEY);
-}
-
-function setCurrentUser(email) {
-  if (email) localStorage.setItem(CURRENT_USER_KEY, email);
-  else localStorage.removeItem(CURRENT_USER_KEY);
-}
-
-function getUserStateKey() {
-  const email = getCurrentUser();
-  return email ? `${STORAGE_KEY}:${email}` : STORAGE_KEY;
-}
-
 function saveState() {
   // ローカルに保存（ログイン中ユーザーごとに分ける）
   try {
-    localStorage.setItem(getUserStateKey(), JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
     console.warn('保存失敗:', e);
   }
@@ -213,17 +184,7 @@ function saveState() {
 
 function loadState() {
   try {
-    const userKey = getUserStateKey();
-    let raw = localStorage.getItem(userKey);
-
-    // 自動移行: 旧キーのデータがあり、ユーザー別キーが空ならコピーする
-    if (!raw) {
-      const legacyRaw = localStorage.getItem(STORAGE_KEY);
-      if (legacyRaw) {
-        localStorage.setItem(userKey, legacyRaw);
-        raw = legacyRaw;
-      }
-    }
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
     const base = defaultState();
@@ -631,20 +592,6 @@ function showView(name) {
   if (name === 'Annual') renderAnnualChart(state.chartYear);
 }
 
-function showAuthScreen() {
-  const authEl = document.getElementById('authScreen');
-  const appEl = document.getElementById('app');
-  if (authEl) authEl.classList.remove('hidden');
-  if (appEl) appEl.classList.add('hidden');
-}
-
-function showAppScreen() {
-  const authEl = document.getElementById('authScreen');
-  const appEl = document.getElementById('app');
-  if (authEl) authEl.classList.add('hidden');
-  if (appEl) appEl.classList.remove('hidden');
-}
-
 function openMenu() {
   document.getElementById('menuModal').classList.remove('hidden');
 }
@@ -841,55 +788,38 @@ function setupEvents() {
     if (handler) handler();
   });
 
-  // ── 認証（ログイン/新規登録/ログアウト） ──
-  bind('authSignIn', 'click', async () => {
-    const email = document.getElementById('authEmail').value.trim();
-    const pass  = document.getElementById('authPassword').value.trim();
-    if (!email || !pass) {
-      document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
-      return;
+  // ── データ移行 ──
+  bind('exportData', 'click', async () => {
+    const data = JSON.stringify(state);
+    const area = document.getElementById('importData');
+    if (area) area.value = data;
+    if (navigator.clipboard) {
+      try { await navigator.clipboard.writeText(data); } catch {}
     }
-    const users = loadUsers();
-    const user = users.find(u => u.email === email && u.password === pass);
-    if (!user) {
-      document.getElementById('authMessage').textContent = 'ログインに失敗しました。';
-      return;
-    }
-    setCurrentUser(email);
-    document.getElementById('authMessage').textContent = '';
-    showAppScreen();
-    state = defaultState();
-    loadState();
-    renderAll();
-    showView('Home');
-    showMorningGreetingOnce();
+    showAlert('データを書き出しました。必要なら貼り付け欄からコピーしてください。');
   });
 
-  bind('authSignUp', 'click', async () => {
-    const email = document.getElementById('authEmail').value.trim();
-    const pass  = document.getElementById('authPassword').value.trim();
-    if (!email || !pass) {
-      document.getElementById('authMessage').textContent = 'メールとパスワードを入力してください。';
+  bind('importDataBtn', 'click', () => {
+    const area = document.getElementById('importData');
+    if (!area || !area.value.trim()) {
+      showAlert('貼り付け欄にデータを入れてください。');
       return;
     }
-    if (pass.length < 8) {
-      document.getElementById('authMessage').textContent = 'パスワードは8文字以上にしてください。';
-      return;
+    try {
+      const saved = JSON.parse(area.value.trim());
+      const base = defaultState();
+      state = {
+        ...base,
+        ...saved,
+        monthlyDeductions: saved.monthlyDeductions || base.monthlyDeductions,
+        holidays: saved.holidays || base.holidays,
+      };
+      saveState();
+      renderAll();
+      showAlert('データを読み込みました。');
+    } catch {
+      showAlert('データの形式が正しくありません。');
     }
-    const users = loadUsers();
-    if (users.some(u => u.email === email)) {
-      document.getElementById('authMessage').textContent = 'そのメールは既に登録されています。';
-      return;
-    }
-    users.push({ email, password: pass });
-    saveUsers(users);
-    document.getElementById('authMessage').textContent = '新規登録しました。続けてログインしてください。';
-  });
-
-  bind('authSignOut', 'click', async () => {
-    setCurrentUser(null);
-    state = defaultState();
-    showAuthScreen();
   });
 
   // ── ① モードラジオボタン ──
@@ -1632,22 +1562,14 @@ function setupAnnualYearOptions() {
 ──────────────────────────────────────────────────────────── */
 
 function init() {
-  // 起動時に「テーマ反映 → イベント登録」
+  // 起動時に「保存読込 → テーマ反映 → イベント登録 → 描画」の順で実行
+  loadState();
   applyTheme(state.theme || 'dark');
   setupAnnualYearOptions();
   setupEvents();
-
-  // ログイン済みならアプリを開く
-  const user = getCurrentUser();
-  if (user) {
-    showAppScreen();
-    loadState();
-    renderAll();
-    showView('Home');
-    showMorningGreetingOnce();
-  } else {
-    showAuthScreen();
-  }
+  renderAll();
+  showView('Home');
+  showMorningGreetingOnce();
 }
 
 document.addEventListener('DOMContentLoaded', init);
