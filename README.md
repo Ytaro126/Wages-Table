@@ -125,3 +125,14 @@ curl -I http://127.0.0.1:8000
 - `JWT_SECRET` を強い値にする
 - ID/パスワードを強化
 - SSHの接続元IPを自分のIPだけに制限
+
+---
+
+## 運用ログ（メモ）
+
+### 2026-03-18
+- HTTPS化完了（Let’s Encrypt）
+  - 対象ドメイン: `ytworksapp.com`, `app.ytworksapp.com`
+  - 証明書: `/etc/letsencrypt/live/ytworksapp.com/`
+  - Nginx: `/etc/nginx/sites-available/wages` / `/etc/nginx/sites-enabled/wages`
+  - 更新: certbot の自動更新を有効化済み
