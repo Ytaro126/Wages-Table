@@ -240,6 +240,8 @@ async function apiFetch(path, options = {}) {
 
 async function saveState() {
   // サーバーに保存（ログイン必須）
+  // 読み込み完了前は保存しない（空の状態で上書きしないため）
+  if (!hasLoadedState || !getAuthToken()) return;
   try {
     await apiFetch('/api/state', {
       method: 'PUT',
@@ -254,7 +256,10 @@ async function saveState() {
 async function loadState() {
   try {
     const res = await apiFetch('/api/state');
-    if (!res.ok) return;
+    if (!res.ok) {
+      hasLoadedState = true;
+      return;
+    }
     const data = await res.json();
     const saved = data.state;
     if (!saved) {
@@ -693,11 +698,59 @@ function showAppScreen() {
 }
 
 function openMenu() {
-  document.getElementById('menuModal').classList.remove('hidden');
+  showModal('menuModal');
 }
 
 function closeMenu() {
-  document.getElementById('menuModal').classList.add('hidden');
+  hideModal('menuModal');
+}
+
+// モーダル表示（左→右にスライド）
+function showModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  // 閉じ中クラスが残っていたら解除
+  modal.classList.remove('is-closing');
+  const panel = modal.querySelector('.modal-content');
+  // 閉じた後に付けた一時スタイルを戻す
+  if (panel) {
+    panel.style.transition = '';
+    panel.style.transform = '';
+  }
+  modal.classList.remove('is-hidden');
+}
+
+// モーダル非表示（右→左にスライドで消す）
+function hideModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal || modal.classList.contains('is-hidden')) return;
+  modal.classList.add('is-closing');
+  const panel = modal.querySelector('.modal-content');
+  if (!panel) {
+    modal.classList.add('is-hidden');
+    modal.classList.remove('is-closing');
+    return;
+  }
+  const cleanup = () => {
+    // まず透明にして非表示扱いにする
+    modal.classList.add('is-hidden');
+    // 閉じた後に「左側待機位置」へ戻すが、見えない状態で一瞬で戻す
+    panel.style.transition = 'none';
+    panel.style.transform = 'translateX(-110%)';
+    // 再フローを発生させてスタイルを確定させる
+    panel.getBoundingClientRect();
+    // 次回の開閉でアニメが効くように戻す
+    panel.style.transition = '';
+    modal.classList.remove('is-closing');
+    panel.removeEventListener('transitionend', onEnd);
+  };
+  const onEnd = (e) => {
+    if (e.target !== panel) return;
+    cleanup();
+  };
+  panel.addEventListener('transitionend', onEnd);
+  // 念のためタイムアウトでも片付ける
+  setTimeout(cleanup, 600);
 }
 
 function applyTheme(theme) {
@@ -740,7 +793,7 @@ function showMemoModal(rec) {
     memoRow('合計（税抜）', yen(ex),  'total') +
     memoRow('合計（税込）', yen(inc), 'total');
 
-  document.getElementById('memoModal').classList.remove('hidden');
+  showModal('memoModal');
 }
 
 /** 年月ピッカーを表示する */
@@ -767,7 +820,7 @@ function showPickerModal() {
     monthSel.appendChild(opt);
   }
 
-  document.getElementById('pickerModal').classList.remove('hidden');
+  showModal('pickerModal');
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -795,19 +848,19 @@ function setupEvents() {
     state.viewMonth = parseInt(document.getElementById('pickerMonth').value, 10);
     saveState();
     renderAll();
-    document.getElementById('pickerModal').classList.add('hidden');
+    hideModal('pickerModal');
   });
   // 配列を forEach で回して、同じ処理をまとめて書く
   ['pickerCancel', 'pickerOverlay'].forEach(id => {
     bind(id, 'click', () => {
-      document.getElementById('pickerModal').classList.add('hidden');
+      hideModal('pickerModal');
     });
   });
 
   // ── メモモーダル閉じる ──
   ['memoClose', 'memoOverlay'].forEach(id => {
     bind(id, 'click', () => {
-      document.getElementById('memoModal').classList.add('hidden');
+      hideModal('memoModal');
     });
   });
 
@@ -1252,11 +1305,11 @@ function openSaveConfirm(skipExistingCheck = false) {
     row('合計（税抜）', yen(ex)) +
     row('合計（税込）', yen(inc));
 
-  document.getElementById('saveConfirmModal').classList.remove('hidden');
+  showModal('saveConfirmModal');
 }
 
 function closeSaveConfirm() {
-  document.getElementById('saveConfirmModal').classList.add('hidden');
+  hideModal('saveConfirmModal');
 }
 
 /**
@@ -1676,13 +1729,11 @@ function showAlert(message, options = {}) {
   alertOkHandler = options.onOk || null;
   alertCancelHandler = options.onCancel || null;
 
-  modal.classList.remove('hidden');
+  showModal('alertModal');
 }
 
 function closeAlert() {
-  const modal = document.getElementById('alertModal');
-  if (!modal) return;
-  modal.classList.add('hidden');
+  hideModal('alertModal');
   alertOkHandler = null;
   alertCancelHandler = null;
 }

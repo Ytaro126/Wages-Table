@@ -24,7 +24,7 @@
   <meta name="format-detection" content="telephone=no">
   <title>配達記録</title>
   <!-- CSSファイルを読み込む -->
-  <link rel="stylesheet" href="style.css?v=20250317">
+  <link rel="stylesheet" href="style.css?v=20250322">
 </head>
 <body>
 
@@ -329,7 +329,7 @@
 
 <!-- 年月ピッカーモーダル（年月を直接選ぶ） -->
 <!-- モーダル = 画面の上に重ねて出す小さな画面 -->
-<div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true">
+<div id="pickerModal" class="modal is-hidden" role="dialog" aria-modal="true">
   <!-- 画面の暗い背景（クリックで閉じる） -->
   <div class="modal-overlay" id="pickerOverlay"></div>
   <div class="modal-content">
@@ -347,7 +347,7 @@
 
 <!-- 日別詳細モーダル（その日の内訳を見る） -->
 <!-- カレンダーで同じ日を再タップすると開く -->
-<div id="memoModal" class="modal hidden" role="dialog" aria-modal="true">
+<div id="memoModal" class="modal is-hidden" role="dialog" aria-modal="true">
   <div class="modal-overlay" id="memoOverlay"></div>
   <div class="modal-content">
     <h3 class="modal-title" id="memoTitle">詳細</h3>
@@ -360,7 +360,7 @@
 
 <!-- 保存確認モーダル -->
 <!-- 保存前に「本当に保存するか」を確認する -->
-<div id="saveConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
+<div id="saveConfirmModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
   <div class="modal-overlay" id="saveConfirmOverlay"></div>
   <div class="modal-content">
     <h3 class="modal-title" id="saveConfirmTitle">保存確認</h3>
@@ -374,7 +374,7 @@
 </div>
 
 <!-- 汎用ポップアップ（メッセージ/確認） -->
-<div id="alertModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
+<div id="alertModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
   <div class="modal-overlay" id="alertOverlay"></div>
   <div class="modal-content">
     <h3 class="modal-title" id="alertTitle">お知らせ</h3>
@@ -388,7 +388,7 @@
 
 <!-- メニュー（ホーム/設定/年間グラフ） -->
 <!-- ハンバーガーを押すと出る一覧 -->
-<div id="menuModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+<div id="menuModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
   <div class="modal-overlay" id="menuOverlay"></div>
   <div class="modal-content">
     <h3 class="modal-title" id="menuTitle">メニュー</h3>
@@ -406,6 +406,6 @@
   JSファイルを読み込む。
   画面のHTMLが全部読み込まれてから動かしたいので、bodyの最後で読み込む。
 -->
-  <script src="main.js?v=20250317"></script>
+  <script src="main.js?v=20250322"></script>
 </body>
 </html>

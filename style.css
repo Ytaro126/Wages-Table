@@ -985,8 +985,9 @@ body.theme-light .cal-cell.holiday {
   pointer-events: none;
   transition: opacity 0.35s ease;
 }
-.modal.hidden { opacity: 0; pointer-events: none; }
-.modal:not(.hidden) { opacity: 1; pointer-events: auto; }
+/* モーダル専用の非表示クラス（display:noneにしないのでアニメーションできる） */
+.modal.is-hidden { opacity: 0; pointer-events: none; }
+.modal:not(.is-hidden) { opacity: 1; pointer-events: auto; }
 
 .modal-overlay {
   /* 背景の暗いスクリーン */
@@ -1019,11 +1020,19 @@ body.theme-light .cal-cell.holiday {
   transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
-.modal:not(.hidden) .modal-content {
+.modal:not(.is-hidden) .modal-content {
   transform: translateX(0);
 }
-.modal:not(.hidden) .modal-overlay {
+.modal:not(.is-hidden) .modal-overlay {
   opacity: 1;
+}
+/* 閉じる時は左へ抜ける */
+.modal.is-closing .modal-content {
+  transform: translateX(-110%);
+}
+/* 閉じる時は背景もフェードアウト */
+.modal.is-closing .modal-overlay {
+  opacity: 0;
 }
 
 .modal-title {

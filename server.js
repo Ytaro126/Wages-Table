@@ -17,9 +17,9 @@ const sqlite3 = require('sqlite3');
 const PORT = process.env.PORT || 8000;
 // JWT用の秘密鍵（本番では必ず環境変数で設定）
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
-// DB保存場所
-const DB_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DB_DIR, 'app.db');
+// DB保存場所（環境変数があればそちらを優先）
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'app.db');
+const DB_DIR = path.dirname(DB_PATH);
 
 // dataフォルダが無ければ作成
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
