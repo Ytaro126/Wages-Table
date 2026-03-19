@@ -24,7 +24,7 @@
   <meta name="format-detection" content="telephone=no">
   <title>配達記録</title>
   <!-- CSSファイルを読み込む -->
-  <link rel="stylesheet" href="style.css?v=20250313b">
+  <link rel="stylesheet" href="style.css?v=20250317">
 </head>
 <body>
 
@@ -323,7 +323,7 @@
 
 <!-- 画面下部に固定される保存ボタン -->
 <!-- いつでも保存できるように固定してある -->
-<div class="save-bar">
+<div class="save-bar hidden" id="saveBar">
   <button class="btn-primary" id="saveRecord">この日に記録</button>
 </div>
 
@@ -406,6 +406,6 @@
   JSファイルを読み込む。
   画面のHTMLが全部読み込まれてから動かしたいので、bodyの最後で読み込む。
 -->
-<script src="main.js?v=20250313"></script>
+  <script src="main.js?v=20250317"></script>
 </body>
 </html>

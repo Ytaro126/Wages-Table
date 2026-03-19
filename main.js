@@ -624,15 +624,19 @@ function showView(name) {
 function showAuthScreen() {
   const authEl = document.getElementById('authScreen');
   const appEl = document.getElementById('app');
+  const saveBar = document.getElementById('saveBar');
   if (authEl) authEl.classList.remove('hidden');
   if (appEl) appEl.classList.add('hidden');
+  if (saveBar) saveBar.classList.add('hidden');
 }
 
 function showAppScreen() {
   const authEl = document.getElementById('authScreen');
   const appEl = document.getElementById('app');
+  const saveBar = document.getElementById('saveBar');
   if (authEl) authEl.classList.add('hidden');
   if (appEl) appEl.classList.remove('hidden');
+  if (saveBar) saveBar.classList.remove('hidden');
 }
 
 function openMenu() {
@@ -804,9 +808,16 @@ function setupEvents() {
   });
 
   bind('authSignOut', 'click', () => {
-    setAuthToken(null);
-    state = defaultState();
-    showAuthScreen();
+    closeMenu();
+    showAlert('ログアウトします。よろしいですか？', {
+      cancelText: 'キャンセル',
+      okText: 'ログアウト',
+      onOk: () => {
+        setAuthToken(null);
+        state = defaultState();
+        showAuthScreen();
+      }
+    });
   });
 
   // ── テーマ切替 ──

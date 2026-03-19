@@ -66,4 +66,62 @@ flowchart TD
 - **ブラウザ**: 画面表示と操作  
 - **EC2**: サーバーを置く場所（公開用）  
 - **Node.js**: アプリの処理・API  
-- **SQLite**: データ保存（同じサーバー内）  
+- **SQLite**: データ保存（同じサーバー内）
+
+---
+
+## 実務向けの最低限運用メモ
+
+### 1. デプロイ手順（ローカル → EC2）
+ローカルの変更をEC2に反映する一番シンプルな方法です。
+
+```bash
+# ローカルで実行（Mac）
+rsync -av -e "ssh -i /Users/ytaro1206/Downloads/wages-key.pem" \
+  --exclude node_modules --exclude .git \
+  /Users/ytaro1206/Wages-Table/ \
+  ubuntu@<EC2のパブリックIP>:~/wages-table/
+```
+
+```bash
+# EC2で実行（アプリ再起動）
+cd ~/wages-table
+pm2 restart wages-app
+```
+
+### 2. バックアップ（最低限）
+SQLiteはファイルなので、DBファイルをコピーすればOKです。
+
+```bash
+# EC2で実行（バックアップ）
+cp ~/wages-table/data/app.db ~/wages-table/data/app.db.bak
+```
+
+### 3. リストア（最低限）
+バックアップから戻す場合は、停止→差し替え→再起動。
+
+```bash
+# EC2で実行（リストア）
+pm2 stop wages-app
+cp ~/wages-table/data/app.db.bak ~/wages-table/data/app.db
+pm2 start wages-app
+```
+
+### 4. 監視（最低限）
+死活確認はまず `pm2` と `curl` で確認します。
+
+```bash
+# EC2で実行（起動状態の確認）
+pm2 list
+```
+
+```bash
+# EC2で実行（HTTP応答チェック）
+curl -I http://127.0.0.1:8000
+```
+
+### 5. 最低限の安全対策（運用メモ）
+- HTTPS化（Let’s Encrypt）
+- `JWT_SECRET` を強い値にする
+- ID/パスワードを強化
+- SSHの接続元IPを自分のIPだけに制限

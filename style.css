@@ -841,7 +841,10 @@ tr:last-child td { border-bottom: none; }
   backdrop-filter:         blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
+  /* 入力欄の上に重ならないようにする（クリックを邪魔しない） */
+  pointer-events: none;
 }
+.save-bar .btn-primary { pointer-events: auto; }
 
 /* メニュー一覧 */
 .menu-list {
@@ -980,7 +983,7 @@ body.theme-light .cal-cell.holiday {
   align-items: stretch;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.35s ease;
 }
 .modal.hidden { opacity: 0; pointer-events: none; }
 .modal:not(.hidden) { opacity: 1; pointer-events: auto; }
@@ -994,6 +997,7 @@ body.theme-light .cal-cell.holiday {
   -webkit-backdrop-filter: blur(4px);
   opacity: 0;
   transition: opacity 0.35s ease;
+  will-change: opacity;
 }
 
 .modal-content {
@@ -1012,7 +1016,8 @@ body.theme-light .cal-cell.holiday {
   overflow-y:  auto;
   -webkit-overflow-scrolling: touch;
   transform: translateX(-110%);
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 .modal:not(.hidden) .modal-content {
   transform: translateX(0);
