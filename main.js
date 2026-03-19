@@ -76,6 +76,8 @@ const defaultState = () => ({
  *               既存レコードの mode は変更しない（過去記録は固定）
  */
 let state = defaultState();
+// サーバーからの読み込みが完了したかどうか
+let hasLoadedState = false;
 
 /* ────────────────────────────────────────────────────────────
    2. 計算系関数
@@ -183,6 +185,46 @@ function setAuthToken(token) {
   else localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
+/* ────────────────────────────────────────────────────────────
+   3.1 自動ログアウト（無操作タイマー）
+──────────────────────────────────────────────────────────── */
+
+// 5分（ミリ秒）で自動ログアウトする
+const INACTIVITY_LIMIT = 5 * 60 * 1000;
+// タイマーIDを保持して、必要に応じて停止できるようにする
+let inactivityTimer = null;
+
+// 無操作が続いた時のログアウト処理（共通化）
+function logoutByInactivity() {
+  // トークンを消す（ログイン解除）
+  setAuthToken(null);
+  // 画面の状態を初期化
+  state = defaultState();
+  // ログイン画面へ戻す
+  showAuthScreen();
+}
+
+// タイマーを開始（すでにあればリセット）
+function startInactivityTimer() {
+  stopInactivityTimer();
+  inactivityTimer = setTimeout(logoutByInactivity, INACTIVITY_LIMIT);
+}
+
+// 何か操作があったらタイマーをリセットする
+function resetInactivityTimer() {
+  // ログイン中だけ監視する（未ログインなら何もしない）
+  if (!getAuthToken()) return;
+  startInactivityTimer();
+}
+
+// タイマーを停止する（ログアウト時に使う）
+function stopInactivityTimer() {
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = null;
+  }
+}
+
 async function apiFetch(path, options = {}) {
   const headers = options.headers || {};
   const token = getAuthToken();
@@ -215,7 +257,10 @@ async function loadState() {
     if (!res.ok) return;
     const data = await res.json();
     const saved = data.state;
-    if (!saved) return;
+    if (!saved) {
+      hasLoadedState = true;
+      return;
+    }
     const base = defaultState();
     state = {
       ...base,
@@ -225,8 +270,12 @@ async function loadState() {
     };
     if (saved.feature1Enabled === true && !saved.currentMode) state.currentMode = 'feature1';
     else if (saved.feature2Enabled === true && !saved.currentMode) state.currentMode = 'feature2';
+    // 読み込み完了フラグを立てる
+    hasLoadedState = true;
   } catch (e) {
     console.error('データ読み込み失敗:', e);
+    // 失敗しても「読み込み済み」として扱う（無限に保存できなくなるのを防ぐ）
+    hasLoadedState = true;
   }
 }
 
@@ -628,6 +677,8 @@ function showAuthScreen() {
   if (authEl) authEl.classList.remove('hidden');
   if (appEl) appEl.classList.add('hidden');
   if (saveBar) saveBar.classList.add('hidden');
+  // ログイン画面では無操作タイマーを止める
+  stopInactivityTimer();
 }
 
 function showAppScreen() {
@@ -637,6 +688,8 @@ function showAppScreen() {
   if (authEl) authEl.classList.add('hidden');
   if (appEl) appEl.classList.remove('hidden');
   if (saveBar) saveBar.classList.remove('hidden');
+  // アプリ画面に入ったら無操作タイマーを開始
+  startInactivityTimer();
 }
 
 function openMenu() {
@@ -651,7 +704,8 @@ function applyTheme(theme) {
   // body にクラスを付け替えて見た目を切り替える
   state.theme = theme;
   document.body.classList.toggle('theme-light', theme === 'light');
-  saveState();
+  // まだ読み込み前は保存しない（空の状態で上書きしないため）
+  if (hasLoadedState && getAuthToken()) saveState();
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -779,6 +833,12 @@ function setupEvents() {
     renderDiagnostics();
   });
 
+  // ── 無操作ログアウト用の監視 ──
+  // どれか1つでも操作があれば「操作した」とみなす
+  ['click', 'keydown', 'touchstart', 'mousemove', 'input'].forEach(evt => {
+    document.addEventListener(evt, resetInactivityTimer, { passive: true });
+  });
+
   // ── ログイン/ログアウト ──
   bind('authSignIn', 'click', async () => {
     const id = document.getElementById('authId').value.trim();
@@ -799,6 +859,8 @@ function setupEvents() {
       showAppScreen();
       state = defaultState();
       await loadState();
+      // 保存データのテーマを反映
+      applyTheme(state.theme || 'dark');
       renderAll();
       showView('Home');
       showMorningGreetingOnce();
@@ -1684,8 +1746,7 @@ function setupAnnualYearOptions() {
 ──────────────────────────────────────────────────────────── */
 
 function init() {
-  // 起動時に「保存読込 → テーマ反映 → イベント登録 → 描画」の順で実行
-  applyTheme(state.theme || 'dark');
+  // 起動時に「イベント登録 → 保存読込 → テーマ反映 → 描画」の順で実行
   setupAnnualYearOptions();
   setupEvents();
 
@@ -1693,11 +1754,15 @@ function init() {
   if (token) {
     showAppScreen();
     loadState().then(() => {
+      // 読み込んだテーマを反映
+      applyTheme(state.theme || 'dark');
       renderAll();
       showView('Home');
       showMorningGreetingOnce();
     });
   } else {
+    // 未ログイン時は初期テーマで表示（保存はしない）
+    applyTheme('dark');
     showAuthScreen();
   }
 }
