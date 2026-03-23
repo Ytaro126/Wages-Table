@@ -4,7 +4,12 @@
   "description": "Delivery wages app with Node.js auth backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
