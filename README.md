@@ -78,7 +78,7 @@ flowchart TD
 ```bash
 # ローカルで実行（Mac）
 rsync -av -e "ssh -i /Users/ytaro1206/Downloads/wages-key.pem" \
-  --exclude node_modules --exclude .git \
+  --exclude node_modules --exclude .git --exclude '*.db' --exclude '*.db-*' \
   /Users/ytaro1206/Wages-Table/ \
   ubuntu@<EC2のパブリックIP>:~/wages-table/
 ```
@@ -89,12 +89,16 @@ cd ~/wages-table
 pm2 restart wages-app
 ```
 
+補足:
+- SQLite 本体は `/home/ubuntu/wages-data/app.db` を使う
+- デプロイ時に `.db` を同期しない（ローカルDBで本番DBを上書きしないため）
+
 ### 2. バックアップ（最低限）
 SQLiteはファイルなので、DBファイルをコピーすればOKです。
 
 ```bash
 # EC2で実行（バックアップ）
-cp ~/wages-table/data/app.db ~/wages-table/data/app.db.bak
+cp /home/ubuntu/wages-data/app.db /home/ubuntu/wages-data/app.db.bak
 ```
 
 ### 3. リストア（最低限）
@@ -103,7 +107,7 @@ cp ~/wages-table/data/app.db ~/wages-table/data/app.db.bak
 ```bash
 # EC2で実行（リストア）
 pm2 stop wages-app
-cp ~/wages-table/data/app.db.bak ~/wages-table/data/app.db
+cp /home/ubuntu/wages-data/app.db.bak /home/ubuntu/wages-data/app.db
 pm2 start wages-app
 ```
 

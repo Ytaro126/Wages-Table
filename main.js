@@ -14,6 +14,21 @@
  *  ⑨ ±ステッパーボタン
  * ============================================================ */
 'use strict';
+function getById(id) {
+    return document.getElementById(id);
+}
+function getInputById(id) {
+    return getById(id);
+}
+function getInputValue(id) {
+    return getInputById(id)?.value ?? '';
+}
+function setInputValue(id, value) {
+    const input = getInputById(id);
+    if (!input)
+        return;
+    input.value = String(value);
+}
 // strictモード: うっかりミス（未宣言変数など）を防ぐための安全装置
 /*
   ─────────────────────────────────────────────
@@ -116,6 +131,9 @@ function calcRecordTaxIn(rec) {
     // 夜間配達は税込187円、集荷とその他は税込同額で加算
     return base + rec.count170 * 187 + rec.pickupCount * 90 + rec.otherIncome;
 }
+function getTaxInDisplay(rec) {
+    return rec.skipTaxInCalc ? '計算しない' : yen(calcRecordTaxIn(rec));
+}
 /** 指定年月のレコード配列を返す */
 function getMonthRecords(year, month) {
     // YYYY-MM の接頭辞でフィルタする
@@ -134,8 +152,13 @@ function calcMonthlyTotals(year, month) {
     let totalCount = 0, total170 = 0, totalPickup = 0, totalOther = 0;
     let totalF1 = 0, totalF2Ex = 0, totalF2In = 0, totalF3Ex = 0, totalF3In = 0;
     let totalEx = 0, totalIn = 0;
+    let skippedTaxInCount = 0;
+    let skippedTaxInAmount = 0;
     // forEach は「配列の要素を順番に処理」するループ
     recs.forEach(r => {
+        const recordEx = calcRecordTaxEx(r);
+        const recordIn = calcRecordTaxIn(r);
+        const taxGap = recordIn - recordEx;
         // 数量合計
         totalCount += r.count;
         total170 += r.count170;
@@ -155,17 +178,22 @@ function calcMonthlyTotals(year, month) {
             totalF3In += r.count * 176;
         }
         // 税抜/税込合計
-        totalEx += calcRecordTaxEx(r);
-        totalIn += calcRecordTaxIn(r);
+        totalEx += recordEx;
+        totalIn += recordIn;
+        if (r.skipTaxInCalc) {
+            skippedTaxInCount += 1;
+            skippedTaxInAmount += taxGap;
+        }
     });
     // 月固定控除（YYYY-MMキーで保持）
     const deduction = state.monthlyDeductions[toMonthKey(year, month)] || 0;
     return {
         totalCount, total170, totalPickup, totalOther,
         totalF1, totalF2Ex, totalF2In, totalF3Ex, totalF3In,
-        totalEx, totalIn,
+        totalEx, totalIn, skippedTaxInCount, skippedTaxInAmount,
         deduction,
         finalEx: totalEx - deduction,
+        finalInWithSkippedDaysRemoved: totalIn - skippedTaxInAmount - deduction,
         finalIn: totalIn - deduction,
     };
 }
@@ -217,10 +245,10 @@ function stopInactivityTimer() {
     }
 }
 async function apiFetch(path, options = {}) {
-    const headers = options.headers || {};
+    const headers = new Headers(options.headers);
     const token = getAuthToken();
     if (token)
-        headers.Authorization = `Bearer ${token}`;
+        headers.set('Authorization', `Bearer ${token}`);
     const res = await fetch(path, { ...options, headers });
     if (res.status === 401) {
         // 認証切れの場合はログアウト扱い
@@ -323,7 +351,7 @@ function renderCalendar() {
         // 日付番号
         const dayNum = document.createElement('span');
         dayNum.className = 'cal-day-num';
-        dayNum.textContent = d;
+        dayNum.textContent = String(d);
         cell.appendChild(dayNum);
         if (rec) {
             // if (rec) は「その日が記録済みなら」という条件分岐
@@ -373,15 +401,18 @@ function renderCalendar() {
 function syncFormFromSelectedDate() {
     // 選択日の値をフォームに反映（未記録なら空欄）
     const { selectedDate } = state;
-    document.getElementById('selectedDateDisplay').value = selectedDate || '';
+    setInputValue('selectedDateDisplay', selectedDate || '');
     const rec = selectedDate ? state.records.find(r => r.date === selectedDate) : null;
     const isHoliday = selectedDate ? isHolidayDate(selectedDate) : false;
-    document.getElementById('inputCount').value = rec ? rec.count : '';
-    document.getElementById('inputCount170').value = rec ? rec.count170 : '';
-    document.getElementById('inputPickup').value = rec ? rec.pickupCount : '';
-    document.getElementById('inputOther').value = rec ? rec.otherIncome : '';
+    setInputValue('inputCount', rec ? rec.count : '');
+    setInputValue('inputCount170', rec ? rec.count170 : '');
+    setInputValue('inputPickup', rec ? rec.pickupCount : '');
+    setInputValue('inputOther', rec ? rec.otherIncome : '');
+    const skipTaxInCalc = getById('skipTaxInCalc');
+    if (skipTaxInCalc)
+        skipTaxInCalc.checked = !!rec?.skipTaxInCalc;
     // 勤務日/休日の表示を更新
-    const workdaySelect = document.getElementById('workdaySelect');
+    const workdaySelect = getInputById('workdaySelect');
     if (workdaySelect) {
         workdaySelect.value = isHoliday ? 'holiday' : 'work';
     }
@@ -397,9 +428,9 @@ function syncFormFromSelectedDate() {
  */
 function renderModeRadio() {
     // ラジオボタンは state.currentMode を見てON/OFFを決める
-    const r1 = document.getElementById('modeFeature1');
-    const r2 = document.getElementById('modeFeature2');
-    const r3 = document.getElementById('modeFeature3');
+    const r1 = getById('modeFeature1');
+    const r2 = getById('modeFeature2');
+    const r3 = getById('modeFeature3');
     if (r1)
         r1.checked = state.currentMode === 'feature1';
     if (r2)
@@ -427,9 +458,11 @@ function updateCurrentModeDisplay() {
  */
 function updatePreview() {
     // 入力値だけで仮計算（保存はしない）
-    const previewEl = document.getElementById('calcPreview');
+    const previewEl = getById('calcPreview');
+    if (!previewEl)
+        return;
     const mode = getSelectedMode();
-    const isHolidaySelected = document.getElementById('workdaySelect')?.value === 'holiday';
+    const isHolidaySelected = getInputValue('workdaySelect') === 'holiday';
     if (isHolidaySelected) {
         // 休日を選んでいるときは金額計算をしない
         previewEl.innerHTML = `<div class="preview-line">本日の予想合計: ----</div>`;
@@ -451,11 +484,20 @@ function updatePreview() {
         pickupCount: parseInputInt('inputPickup'),
         otherIncome: parseInputInt('inputOther'),
         mode,
+        skipTaxInCalc: getById('skipTaxInCalc')?.checked ?? false,
     };
     // 税抜・税込の合計金額を計算
     const ex = calcRecordTaxEx(mockRec);
-    const inc = calcRecordTaxIn(mockRec);
     // 税抜 / 税込 を1行で表示
+    if (mockRec.skipTaxInCalc) {
+        previewEl.innerHTML =
+            `<span class="preview-label">本日の予想合計</span>` +
+                `<span class="preview-ex">${yen(ex)}</span>` +
+                `<span class="preview-sep">/</span>` +
+                `<span class="preview-in">(税込計算なし)</span>`;
+        return;
+    }
+    const inc = calcRecordTaxIn(mockRec);
     previewEl.innerHTML =
         `<span class="preview-label">本日の予想合計</span>` +
             `<span class="preview-ex">${yen(ex)}</span>` +
@@ -505,15 +547,18 @@ function renderMonthlyTotals() {
             row('夜間配達', `${t.total170} 件`) +
             row('集荷枠', `${t.totalPickup} 件`) +
             row('その他収入', yen(t.totalOther)) +
+            (t.skippedTaxInCount > 0 ? row('税込計算なし', `${t.skippedTaxInCount} 日`) : '') +
             `<div class="total-divider"></div>` +
             row('日給保証 合計', yen(t.totalF1)) +
             row('単価150 合計', `${yen(t.totalF2Ex)} / (${yen(t.totalF2In)})`) +
             row('単価160 合計', `${yen(t.totalF3Ex)} / (${yen(t.totalF3In)})`) +
             `<div class="total-divider"></div>` +
-            row('小計（税抜 / 税込）', `${yen(t.totalEx)} / (${yen(t.totalIn)})`) +
+            row('小計（税抜）', yen(t.totalEx)) +
+            row('小計（税込）', yen(t.totalIn)) +
             row('固定控除', `－${yen(t.deduction)}`) +
             `<div class="total-divider"></div>` +
             row('最終合計（税抜）', yen(t.finalEx), 'final') +
+            row('税込削除日分を含めた合計', yen(t.finalInWithSkippedDaysRemoved), 'final') +
             row('最終合計（税込）', yen(t.finalIn), 'final') +
             // ④ 前月比
             `<div class="total-row total-row--compare">
@@ -542,7 +587,7 @@ function renderTable() {
     recs.forEach(rec => {
         // 1行分の税抜/税込を先に計算
         const ex = calcRecordTaxEx(rec);
-        const inc = calcRecordTaxIn(rec);
+        const inc = yen(calcRecordTaxIn(rec));
         const f1 = rec.mode === 'feature1' ? yen(calcFeature1(rec.count)) : '—';
         const f2 = rec.mode === 'feature2' ? yen(rec.count * 150) : '—';
         const f3 = rec.mode === 'feature3' ? yen(rec.count * 160) : '—';
@@ -557,11 +602,11 @@ function renderTable() {
             yen(rec.otherIncome),
             f1, f2, f3,
             yen(ex),
-            yen(inc),
+            inc,
         ];
         dataCells.forEach(val => {
             const td = document.createElement('td');
-            td.textContent = val;
+            td.textContent = String(val);
             tr.appendChild(td);
         });
         // 削除ボタン（2段階確認）
@@ -604,7 +649,7 @@ function renderTable() {
 function renderDeductionInput() {
     // 表示中の月に対応する控除額を入力欄へ
     const val = state.monthlyDeductions[toMonthKey(state.viewYear, state.viewMonth)];
-    document.getElementById('inputDeduction').value = val !== undefined ? val : '';
+    setInputValue('inputDeduction', val !== undefined ? val : '');
 }
 /** 全体を再描画する */
 function renderAll() {
@@ -732,7 +777,11 @@ function showMemoModal(rec) {
     const ex = calcRecordTaxEx(rec);
     const inc = calcRecordTaxIn(rec);
     const totalCount = rec.count + rec.count170;
-    document.getElementById('memoTitle').textContent = `${rec.date} の記録`;
+    const memoTitle = getById('memoTitle');
+    const memoBody = getById('memoBody');
+    if (!memoTitle || !memoBody)
+        return;
+    memoTitle.textContent = `${rec.date} の記録`;
     // 1行分のHTMLを作る小さな関数
     const memoRow = (label, value, mod = '') => {
         const cls = mod ? `memo-row memo-row--${mod}` : 'memo-row';
@@ -741,27 +790,30 @@ function showMemoModal(rec) {
       <span class="memo-value">${value}</span>
     </div>`;
     };
-    document.getElementById('memoBody').innerHTML =
+    memoBody.innerHTML =
         memoRow('配達完了数', `${rec.count} 件`) +
             memoRow('夜間配達枠', `${rec.count170} 件`) +
             memoRow('配達合計', `${totalCount} 件`) +
             memoRow('集荷枠', `${rec.pickupCount} 件`) +
             memoRow('その他収入', yen(rec.otherIncome)) +
+            memoRow('税込計算', rec.skipTaxInCalc ? 'しない' : 'する') +
             memoRow('計算モード', rec.mode === 'feature1' ? '日給保証' : rec.mode === 'feature2' ? '単価150' : '単価160') +
             memoRow('合計（税抜）', yen(ex), 'total') +
-            memoRow('合計（税込）', yen(inc), 'total');
+            memoRow('合計（税込）', getTaxInDisplay(rec), 'total');
     showModal('memoModal');
 }
 /** 年月ピッカーを表示する */
 function showPickerModal() {
     // 年/月のセレクトを現在の表示月で初期化する
-    const yearSel = document.getElementById('pickerYear');
-    const monthSel = document.getElementById('pickerMonth');
+    const yearSel = getById('pickerYear');
+    const monthSel = getById('pickerMonth');
+    if (!yearSel || !monthSel)
+        return;
     yearSel.innerHTML = '';
     // 年は2025〜2030の範囲で固定
     for (let y = 2025; y <= 2030; y++) {
         const opt = document.createElement('option');
-        opt.value = y;
+        opt.value = String(y);
         opt.textContent = `${y}年`;
         if (y === state.viewYear)
             opt.selected = true;
@@ -771,7 +823,7 @@ function showPickerModal() {
     // 月は0〜11（表示は1〜12）
     for (let m = 0; m < 12; m++) {
         const opt = document.createElement('option');
-        opt.value = m;
+        opt.value = String(m);
         opt.textContent = `${m + 1}月`;
         if (m === state.viewMonth)
             opt.selected = true;
@@ -785,7 +837,7 @@ function showPickerModal() {
 function setupEvents() {
     // 関数の中に関数を作ることもできる（ヘルパー関数）
     const bind = (id, event, handler) => {
-        const el = document.getElementById(id);
+        const el = getById(id);
         if (!el)
             return;
         el.addEventListener(event, handler);
@@ -798,8 +850,8 @@ function setupEvents() {
     // ── ピッカー ──
     bind('pickerConfirm', 'click', () => {
         // セレクトの値を数値に変換して反映
-        state.viewYear = parseInt(document.getElementById('pickerYear').value, 10);
-        state.viewMonth = parseInt(document.getElementById('pickerMonth').value, 10);
+        state.viewYear = parseInt(getInputValue('pickerYear'), 10);
+        state.viewMonth = parseInt(getInputValue('pickerMonth'), 10);
         saveState();
         renderAll();
         hideModal('pickerModal');
@@ -844,10 +896,12 @@ function setupEvents() {
     });
     // ── ログイン/ログアウト ──
     bind('authSignIn', 'click', async () => {
-        const id = document.getElementById('authId').value.trim();
-        const pass = document.getElementById('authPassword').value.trim();
+        const id = getInputValue('authId').trim();
+        const pass = getInputValue('authPassword').trim();
         if (!id || !pass) {
-            document.getElementById('authMessage').textContent = 'IDとパスワードを入力してください。';
+            const authMessage = getById('authMessage');
+            if (authMessage)
+                authMessage.textContent = 'IDとパスワードを入力してください。';
             return;
         }
         const res = await fetch('/api/auth/login', {
@@ -858,7 +912,9 @@ function setupEvents() {
         if (res.ok) {
             const data = await res.json();
             setAuthToken(data.token);
-            document.getElementById('authMessage').textContent = '';
+            const authMessage = getById('authMessage');
+            if (authMessage)
+                authMessage.textContent = '';
             showAppScreen();
             state = defaultState();
             await loadState();
@@ -869,7 +925,9 @@ function setupEvents() {
             showMorningGreetingOnce();
         }
         else {
-            document.getElementById('authMessage').textContent = 'ログインに失敗しました。';
+            const authMessage = getById('authMessage');
+            if (authMessage)
+                authMessage.textContent = 'ログインに失敗しました。';
         }
     });
     bind('authSignOut', 'click', () => {
@@ -890,16 +948,19 @@ function setupEvents() {
     // ── 休日セレクトの即時反映 ──
     // 休日を選んだ瞬間に「休日として登録」する
     bind('workdaySelect', 'change', (e) => {
+        const target = e.target;
+        if (!target)
+            return;
         if (!state.selectedDate) {
             showAlert('日付を選択してください');
-            e.target.value = 'work';
+            target.value = 'work';
             return;
         }
-        if (e.target.value === 'holiday') {
+        if (target.value === 'holiday') {
             const exists = state.records.some(r => r.date === state.selectedDate);
             if (exists) {
                 showAlert('この日は記録されています。休日に修正したい場合はお手数おかけしますが一度削除して下さい。');
-                e.target.value = 'work';
+                target.value = 'work';
                 return;
             }
             state.holidays[state.selectedDate] = true;
@@ -916,7 +977,10 @@ function setupEvents() {
     });
     // ── 年間グラフ 年選択 ──
     bind('annualYear', 'change', (e) => {
-        state.chartYear = parseInt(e.target.value, 10);
+        const target = e.target;
+        if (!target)
+            return;
+        state.chartYear = parseInt(target.value, 10);
         saveState();
         renderAnnualChart(state.chartYear);
     });
@@ -946,7 +1010,7 @@ function setupEvents() {
     // ── データ移行 ──
     bind('exportData', 'click', async () => {
         const data = JSON.stringify(state);
-        const area = document.getElementById('importData');
+        const area = getById('importData');
         if (area)
             area.value = data;
         if (navigator.clipboard) {
@@ -958,7 +1022,7 @@ function setupEvents() {
         showAlert('データを書き出しました。必要なら貼り付け欄からコピーしてください。');
     });
     bind('importDataBtn', 'click', () => {
-        const area = document.getElementById('importData');
+        const area = getById('importData');
         if (!area || !area.value.trim()) {
             showAlert('貼り付け欄にデータを入れてください。');
             return;
@@ -1004,9 +1068,10 @@ function setupEvents() {
         });
     });
     // ── ② プレビュー: テキスト入力のたびに更新 ──
-    ['inputCount', 'inputCount170', 'inputPickup', 'inputOther'].forEach(id => {
+    ['inputCount', 'inputCount170', 'inputPickup', 'inputOther', 'skipTaxInCalc'].forEach(id => {
         bind(id, 'input', updatePreview);
     });
+    bind('skipTaxInCalc', 'change', updatePreview);
     // ── ⑨ ステッパーボタン（formSection 内の全ボタンにまとめて対応）──
     bind('formSection', 'click', handleStepperClick);
     // 控除額のステッパーは formSection の外なので別途登録
@@ -1023,7 +1088,7 @@ function setupEvents() {
         }
     });
     // ── 「この日に記録」ボタン ──
-    bind('saveRecord', 'click', openSaveConfirm);
+    bind('saveRecord', 'click', () => openSaveConfirm());
     // ── ⑤ 前回値を使う ──
     bind('fillPrev', 'click', fillPrevRecord);
     // ── 控除額保存 ──
@@ -1046,19 +1111,19 @@ function setupEvents() {
  */
 function handleStepperClick(e) {
     // ステッパーの + / - ボタンの共通処理
-    const btn = e.target.closest('.stepper-btn');
+    const btn = e.target?.closest('.stepper-btn');
     if (!btn)
         return;
     const targetId = btn.dataset.target;
     const delta = parseInt(btn.dataset.delta, 10);
     if (!targetId || isNaN(delta))
         return;
-    const input = document.getElementById(targetId);
+    const input = getInputById(targetId);
     if (!input)
         return;
     const current = parseInt(input.value, 10) || 0;
     const newVal = Math.max(0, current + delta);
-    input.value = newVal;
+    input.value = String(newVal);
     // 配達関連の入力なら即プレビュー更新
     if (['inputCount', 'inputCount170', 'inputPickup', 'inputOther'].includes(targetId)) {
         updatePreview();
@@ -1078,7 +1143,7 @@ function saveRecord() {
         return;
     }
     // 勤務日/休日の取得
-    const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
+    const isHoliday = getInputValue('workdaySelect') === 'holiday';
     // 休日なら「記録しない」で保存（休日登録だけ行う）
     if (isHoliday) {
         // 休日の日に「保存」を押したら案内ポップアップだけ出す
@@ -1125,6 +1190,7 @@ function saveRecord() {
         pickupCount: parseInputInt('inputPickup'),
         otherIncome: parseInputInt('inputOther'),
         mode,
+        skipTaxInCalc: getById('skipTaxInCalc')?.checked ?? false,
     };
     // 既存レコードがあれば上書き、なければ追加
     // findIndex は「条件に合う最初の場所（番号）」を探す
@@ -1165,7 +1231,7 @@ function openSaveConfirm(skipExistingCheck = false) {
         return;
     }
     // 勤務日/休日の判定（休日なら保存確認をスキップ）
-    const isHoliday = document.getElementById('workdaySelect')?.value === 'holiday';
+    const isHoliday = getInputValue('workdaySelect') === 'holiday';
     if (isHoliday) {
         // 休日のときは「保存確認」は出さずに終了
         showAlert('この日は休日で登録済です。');
@@ -1215,23 +1281,28 @@ function openSaveConfirm(skipExistingCheck = false) {
         pickupCount: parseInputInt('inputPickup'),
         otherIncome: parseInputInt('inputOther'),
         mode,
+        skipTaxInCalc: getById('skipTaxInCalc')?.checked ?? false,
     };
     const ex = calcRecordTaxEx(preview);
-    const inc = calcRecordTaxIn(preview);
+    const inc = getTaxInDisplay(preview);
     const row = (label, value) => `<div class="confirm-row">
     <span class="confirm-label">${label}</span>
     <span class="confirm-value">${value}</span>
   </div>`;
-    document.getElementById('saveConfirmBody').innerHTML =
+    const saveConfirmBody = getById('saveConfirmBody');
+    if (!saveConfirmBody)
+        return;
+    saveConfirmBody.innerHTML =
         row('日付', preview.date) +
             row('配達完了数', `${preview.count} 件`) +
             row('夜間配達枠', `${preview.count170} 件`) +
             row('配達合計', `${preview.count + preview.count170} 件`) +
             row('集荷枠', `${preview.pickupCount} 件`) +
             row('その他収入', yen(preview.otherIncome)) +
+            row('税込計算', preview.skipTaxInCalc ? 'しない' : 'する') +
             row('計算モード', mode === 'feature1' ? '日給保証' : mode === 'feature2' ? '単価150' : '単価160') +
             row('合計（税抜）', yen(ex)) +
-            row('合計（税込）', yen(inc));
+            row('合計（税込）', inc);
     showModal('saveConfirmModal');
 }
 function closeSaveConfirm() {
@@ -1255,10 +1326,13 @@ function fillPrevRecord() {
         showMessage('前の記録が見つかりません', 'error', 'formMessage');
         return;
     }
-    document.getElementById('inputCount').value = prev.count;
-    document.getElementById('inputCount170').value = prev.count170;
-    document.getElementById('inputPickup').value = prev.pickupCount;
-    document.getElementById('inputOther').value = prev.otherIncome;
+    setInputValue('inputCount', prev.count);
+    setInputValue('inputCount170', prev.count170);
+    setInputValue('inputPickup', prev.pickupCount);
+    setInputValue('inputOther', prev.otherIncome);
+    const skipTaxInCalc = getById('skipTaxInCalc');
+    if (skipTaxInCalc)
+        skipTaxInCalc.checked = !!prev.skipTaxInCalc;
     // モードは「設定画面の選択」を優先するため変更しない
     updatePreview(); // ② プレビュー更新
     showMessage(`${prev.date} の値を適用しました`, 'success', 'formMessage');
@@ -1275,16 +1349,17 @@ function exportCSV() {
         showMessage('この月の記録がありません', 'error', 'formMessage');
         return;
     }
-    const headers = ['日付', '配達数', '夜間', '集荷', 'その他収入', 'モード', '合算(税抜)', '合算(税込)'];
+    const headers = ['日付', '配達数', '夜間', '集荷', 'その他収入', '税込計算', 'モード', '合算(税抜)', '合算(税込)'];
     const rows = recs.map(r => [
         r.date,
         r.count,
         r.count170,
         r.pickupCount,
         r.otherIncome,
+        r.skipTaxInCalc ? 'しない' : 'する',
         r.mode === 'feature1' ? '日給保証' : r.mode === 'feature2' ? '単価150' : '単価160',
         calcRecordTaxEx(r),
-        calcRecordTaxIn(r),
+        getTaxInDisplay(r),
     ]);
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
     const bom = '\uFEFF'; // BOM: ExcelでのUTF-8文字化け防止
@@ -1318,7 +1393,9 @@ function goMonth(delta) {
     saveState();
     renderAll();
     // スワイプアニメーションを付与（視覚的に月が動いた感）
-    const wrapper = document.getElementById('calendarSwipe');
+    const wrapper = getById('calendarSwipe');
+    if (!wrapper)
+        return;
     const animClass = delta > 0 ? 'swipe-next' : 'swipe-prev';
     wrapper.classList.remove('swipe-next', 'swipe-prev');
     requestAnimationFrame(() => {
@@ -1332,7 +1409,7 @@ function goMonth(delta) {
  * 年間グラフを描画する（税抜/税込の2本バー）
  */
 function renderAnnualChart(year) {
-    const container = document.getElementById('annualChart');
+    const container = getById('annualChart');
     if (!container)
         return;
     const data = [];
@@ -1377,7 +1454,7 @@ function renderAnnualChart(year) {
 function setupSwipe() {
     // 指の動きに追従し、40%超えでスライド
     // ここは「スワイプ操作」を一箇所にまとめた関数
-    const wrapper = document.getElementById('calendarSwipe');
+    const wrapper = getById('calendarSwipe');
     if (!wrapper)
         return;
     // 開始位置・移動量・状態を保存する変数たち
@@ -1468,7 +1545,7 @@ function setupSwipe() {
                 wrapper.style.transform = '';
                 isAnimating = false;
                 // アニメーションが終わったら月を切り替えて描画し直す
-                goMonth(dir, false);
+                goMonth(dir);
             }, { once: true });
         }
         else {
@@ -1566,15 +1643,15 @@ function toMonthKey(year, month) {
 /** input 要素の値を 0以上の整数で返す（空欄・不正値は 0） */
 function parseInputInt(id) {
     // 空欄や負数は0にする
-    const v = parseInt(document.getElementById(id).value, 10);
+    const v = parseInt(getInputValue(id), 10);
     return (isNaN(v) || v < 0) ? 0 : v;
 }
 /** ① ラジオボタンから現在選択中のモードを返す */
 function getSelectedMode() {
     // ラジオの状態から現在のモードを返す
-    const r1 = document.getElementById('modeFeature1');
-    const r2 = document.getElementById('modeFeature2');
-    const r3 = document.getElementById('modeFeature3');
+    const r1 = getById('modeFeature1');
+    const r2 = getById('modeFeature2');
+    const r3 = getById('modeFeature3');
     if (r1 && r1.checked)
         return 'feature1';
     if (r2 && r2.checked)
@@ -1591,7 +1668,9 @@ function getSelectedMode() {
  */
 function showMessage(text, type, targetId) {
     // 画面に一時メッセージを出す
-    const el = document.getElementById(targetId);
+    const el = getById(targetId);
+    if (!el)
+        return;
     el.textContent = text;
     el.className = `form-message ${type}`;
     setTimeout(() => {
@@ -1629,10 +1708,10 @@ function getNextWorkDate(fromDateStr) {
 let alertOkHandler = null;
 let alertCancelHandler = null;
 function showAlert(message, options = {}) {
-    const modal = document.getElementById('alertModal');
-    const msgEl = document.getElementById('alertMessage');
-    const okBtn = document.getElementById('alertOk');
-    const cancelBtn = document.getElementById('alertCancel');
+    const modal = getById('alertModal');
+    const msgEl = getById('alertMessage');
+    const okBtn = getById('alertOk');
+    const cancelBtn = getById('alertCancel');
     if (!modal || !msgEl || !okBtn || !cancelBtn)
         return;
     msgEl.textContent = message;
@@ -1686,18 +1765,20 @@ function showMorningGreetingOnce() {
 /** メッセージをクリアする */
 function clearMessage(targetId) {
     // メッセージ表示を消す
-    const el = document.getElementById(targetId);
+    const el = getById(targetId);
+    if (!el)
+        return;
     el.textContent = '';
     el.className = 'form-message';
 }
 function setupAnnualYearOptions() {
-    const select = document.getElementById('annualYear');
+    const select = getById('annualYear');
     if (!select)
         return;
     select.innerHTML = '';
     for (let y = 2025; y <= 2030; y++) {
         const opt = document.createElement('option');
-        opt.value = y;
+        opt.value = String(y);
         opt.textContent = `${y}年`;
         if (y === state.chartYear)
             opt.selected = true;

@@ -24,7 +24,7 @@
   <meta name="format-detection" content="telephone=no">
   <title>配達記録</title>
   <!-- CSSファイルを読み込む -->
-  <link rel="stylesheet" href="style.css?v=20250322">
+  <link rel="stylesheet" href="style.css?v=20260327">
 </head>
 <body>
 
@@ -155,6 +155,13 @@
                min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
         <button class="stepper-btn" data-target="inputOther" data-delta="500" aria-label="500増やす">＋</button>
       </div>
+    </div>
+
+    <div class="form-group">
+      <label class="toggle-row tax-skip-toggle" for="skipTaxInCalc">
+        <input type="checkbox" id="skipTaxInCalc">
+        <span>税込価格を計算しない</span>
+      </label>
     </div>
 
     <!-- リアルタイム金額プレビュー（入力中に合計を即計算） -->
@@ -406,6 +413,6 @@
   JSファイルを読み込む。
   画面のHTMLが全部読み込まれてから動かしたいので、bodyの最後で読み込む。
 -->
-  <script src="main.js?v=20250322"></script>
+  <script src="main.js?v=20260327"></script>
 </body>
 </html>
