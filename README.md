@@ -78,9 +78,10 @@ flowchart TD
 ```bash
 # ローカルで実行（Mac）
 rsync -av -e "ssh -i /Users/ytaro1206/Downloads/wages-key.pem" \
-  --exclude node_modules --exclude .git --exclude '*.db' --exclude '*.db-*' \
+  --exclude node_modules --exclude .git \
+  --exclude data/app.db --exclude data/*.db \
   /Users/ytaro1206/Wages-Table/ \
-  ubuntu@<EC2のパブリックIP>:~/wages-table/
+  ubuntu@34.224.50.20:~/wages-table/
 ```
 
 ```bash
@@ -124,11 +125,72 @@ pm2 list
 curl -I http://127.0.0.1:8000
 ```
 
+```bash
+# ローカルで実行（公開URLの応答確認）
+curl -I https://ytworksapp.com
+curl -I https://app.ytworksapp.com
+```
+
 ### 5. 最低限の安全対策（運用メモ）
 - HTTPS化（Let’s Encrypt）
 - `JWT_SECRET` を強い値にする
 - ID/パスワードを強化
 - SSHの接続元IPを自分のIPだけに制限
+
+### 6. ドメイン障害時の切り分け
+まず「アプリ障害」か「ドメイン障害」かを分けて確認する。
+
+```bash
+# EC2で実行（アプリ本体の確認）
+curl -I http://127.0.0.1:8000
+pm2 list
+pm2 logs wages-app --lines 50
+sudo systemctl status nginx
+sudo nginx -t
+```
+
+```bash
+# ローカルで実行（公開DNSと公開URLの確認）
+dig +short ytworksapp.com
+dig +short app.ytworksapp.com
+curl -I https://ytworksapp.com
+curl -I https://app.ytworksapp.com
+```
+
+見方:
+- `127.0.0.1:8000` が `200` なら Node.js アプリは生きている
+- 公開URLの `curl` が `200` なら公開経路は生きている
+- `dig +short` が空なら Route 53 / ドメイン側を疑う
+
+### 7. Route 53 の `clientHold` 障害メモ
+2026-04-05 に、ドメイン登録メール未認証が原因で `clientHold` になり、`ytworksapp.com` と `app.ytworksapp.com` の DNS 応答が止まった。
+
+症状:
+- ブラウザで「ページを開けません。ネットワーク接続を確認して」と表示される
+- `dig +short ytworksapp.com` が空になる
+- ただし EC2 上では `curl -I http://127.0.0.1:8000` が `200 OK`
+
+確認場所:
+- AWS Console → Route 53 → Registered domains → `ytworksapp.com`
+- ドメインのステータスコードが `clientHold` になっていないか確認する
+
+対応:
+- `aa9350020@gmail.com` 宛のドメイン認証メールを開いて認証する
+- 認証後、`clientHold` が解除されるまで少し待つ
+
+復旧確認:
+```bash
+# ローカルで実行
+dig +short ytworksapp.com
+dig +short app.ytworksapp.com
+curl -I https://ytworksapp.com
+curl -I https://app.ytworksapp.com
+```
+
+備考:
+- Hosted Zone の `NS` / `SOA` レコード自体は通常編集しない
+- まず Registered domains 側のステータスとネームサーバー委任を確認する
+- サーバーが生きていても、`clientHold` だと外部からは名前解決できない
 
 ---
 
