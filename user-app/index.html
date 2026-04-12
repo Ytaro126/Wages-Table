@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<!--
+  初心者向けメモ:
+  HTMLは「画面の骨組み」を作るファイルです。
+  ここでは、どんな部品がどの順番で並ぶかを決めています。
+  見た目は style.css、動きは main.js に分離しています。
+-->
+<html lang="ja">
+<head>
+  <!-- 文字コードをUTF-8に固定（日本語が文字化けしないように） -->
+  <meta charset="UTF-8">
+  <!--
+    モバイル画面に合わせる基本設定:
+    width=device-width  = 端末の画面幅に合わせる
+    initial-scale=1     = 初期ズームを等倍
+    viewport-fit=cover  = iPhoneのノッチ領域も使う
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- iOSで「ホーム画面に追加」した時にアプリ風の見た目にする -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- iOSのステータスバー色を半透明にする -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- 電話番号の自動リンク化を無効化（誤タップ防止） -->
+  <meta name="format-detection" content="telephone=no">
+  <title>配達記録</title>
+  <!-- CSSファイルを読み込む -->
+  <link rel="stylesheet" href="style.css?v=20260327">
+</head>
+<body>
+
+<!--
+  アプリ全体のラッパー要素。
+  CSS側で最大幅や余白（safe-area）をここに指定する。
+-->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <h2 class="section-title">ログイン</h2>
+    <p class="section-note">IDとパスワードでログインしてください。</p>
+    <div class="form-group">
+      <label class="form-label" for="authId">ID</label>
+      <input type="text" id="authId" class="form-input" placeholder="Ytaro / taro">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="authPassword">パスワード</label>
+      <input type="password" id="authPassword" class="form-input" placeholder="パスワード">
+    </div>
+    <div class="auth-actions">
+      <button class="btn-secondary btn-full" id="authSignIn">ログイン</button>
+    </div>
+    <p id="authMessage" class="form-message" role="alert" aria-live="polite"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+
+  <!-- ヘッダー（アプリ名を表示） -->
+  <header class="header">
+    <!-- ハンバーガーメニュー -->
+    <button class="menu-btn" id="menuButton" aria-label="メニューを開く">☰</button>
+    <h1 class="app-title">配達記録</h1>
+  </header>
+
+  <!-- ホーム画面 -->
+  <div class="view view-home active" id="viewHome">
+
+  <!-- ① カレンダー（表示月の切り替え・日付選択） -->
+  <section class="section card" id="calendarSection">
+    <!-- スワイプ検知用のラッパー -->
+    <div class="calendar-swipe-wrapper" id="calendarSwipe">
+      <!-- 前月/翌月ナビゲーション -->
+      <div class="calendar-nav">
+        <button class="nav-btn" id="prevMonth" aria-label="前月">&#8249;</button>
+        <button class="month-title" id="monthTitle" aria-label="年月を選択">2025年1月</button>
+        <button class="nav-btn" id="nextMonth" aria-label="翌月">&#8250;</button>
+      </div>
+      <!-- 曜日ヘッダー -->
+      <div class="calendar-dow">
+        <span class="dow-cell dow-sun">日</span>
+        <span class="dow-cell">月</span>
+        <span class="dow-cell">火</span>
+        <span class="dow-cell">水</span>
+        <span class="dow-cell">木</span>
+        <span class="dow-cell">金</span>
+        <span class="dow-cell dow-sat">土</span>
+      </div>
+      <!-- 日付セルはJSで動的生成 -->
+      <div id="calendarGrid"></div>
+    </div>
+  </section>
+
+  <!-- ② 記録入力フォーム（計算モード選択も内包） -->
+  <section class="section card" id="formSection">
+    <h2 class="section-title">記録入力</h2>
+
+    <!-- 選択日（カレンダーで選んだ日を表示するだけ） -->
+    <div class="form-group">
+      <label class="form-label" for="selectedDateDisplay">選択日</label>
+      <input type="text" id="selectedDateDisplay" class="form-input"
+             readonly placeholder="カレンダーから日付を選択">
+    </div>
+
+    <!-- 勤務日/休日の切り替え -->
+    <div class="form-group">
+      <label class="form-label" for="workdaySelect">休日設定</label>
+      <select id="workdaySelect" class="form-input">
+        <option value="work">--</option>
+        <option value="holiday">休日</option>
+      </select>
+    </div>
+
+    <!-- 現在の計算モード（設定画面で決める） -->
+    <div class="form-group">
+      <label class="form-label">計算モード（設定）</label>
+      <div class="mode-current" id="currentModeDisplay">未設定</div>
+    </div>
+
+    <!-- 数値入力（±ボタン付きステッパー） -->
+    <div class="form-group">
+      <label class="form-label" for="inputCount">配達完了数（件）</label>
+      <div class="stepper-wrap">
+        <!-- data-target は「どの入力欄を動かすか」を表す -->
+        <!-- data-delta は「どれだけ増減させるか」を表す -->
+        <button class="stepper-btn" data-target="inputCount" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputCount" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputCount" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputCount170">夜間配達枠（件数）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputCount170" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputCount170" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputCount170" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputPickup">集荷枠（件数）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputPickup" data-delta="-1" aria-label="1減らす">−</button>
+        <input type="number" id="inputPickup" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputPickup" data-delta="1" aria-label="1増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inputOther">その他収入（円）</label>
+      <div class="stepper-wrap">
+        <button class="stepper-btn" data-target="inputOther" data-delta="-500" aria-label="500減らす">−</button>
+        <input type="number" id="inputOther" class="form-input stepper-input"
+               min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+        <button class="stepper-btn" data-target="inputOther" data-delta="500" aria-label="500増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="toggle-row tax-skip-toggle" for="skipTaxInCalc">
+        <input type="checkbox" id="skipTaxInCalc">
+        <span>税込価格を計算しない</span>
+      </label>
+    </div>
+
+    <!-- リアルタイム金額プレビュー（入力中に合計を即計算） -->
+    <div id="calcPreview" class="calc-preview" aria-live="polite"></div>
+    <!-- 配達合計（通常+夜間） -->
+    <div id="totalCountDisplay" class="total-count-display" aria-live="polite"></div>
+
+    <!-- 前回値クイック入力（直近の記録をコピー） -->
+    <button class="btn-ghost" id="fillPrev" type="button">前回値を使う</button>
+
+    <!-- フォームのエラーメッセージ表示領域 -->
+    <p id="formMessage" class="form-message" role="alert" aria-live="polite"></p>
+  </section>
+
+  <!-- 月合計（前月比も表示） -->
+  <!-- JSが「合計の数値」を計算してこの中に入れる -->
+  <section class="section card">
+    <h2 class="section-title">月合計</h2>
+    <!-- 月合計の中身はJSで生成する -->
+    <div id="monthlyTotals"></div>
+    <!-- CSVエクスポート -->
+    <button class="btn-secondary btn-full" id="exportCsv" style="margin-top: 1rem;">この月をCSVで出力</button>
+  </section>
+
+  <!-- 記録一覧テーブル（削除は2段階確認） -->
+  <!-- テーブルは横スクロール可能（スマホで見切れてもOK） -->
+  <section class="section card">
+    <h2 class="section-title">記録一覧</h2>
+    <p class="section-note">削除ボタンは2回タップで確定（誤削除防止）</p>
+    <div class="table-scroll">
+      <table id="recordsTable">
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>配達数</th>
+            <th>夜間</th>
+            <th>配達合計</th>
+            <th>集荷</th>
+            <th>その他</th>
+            <th>日給保証</th>
+            <th>単価150</th>
+            <th>単価160</th>
+            <th>合算(税抜)</th>
+            <th>合算(税込)</th>
+            <th>削除</th>
+          </tr>
+        </thead>
+        <!-- 表の中身（行）はJSで追加する -->
+        <tbody id="recordsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  </div><!-- /#viewHome -->
+
+  <!-- 設定画面 -->
+  <!-- ホーム画面とは別の「画面」。JSで表示/非表示を切り替える -->
+  <div class="view view-settings" id="viewSettings">
+    <section class="section card">
+      <h2 class="section-title">設定</h2>
+      <p class="section-note">新規記録に適用されます（過去の記録は変更されません）</p>
+
+      <!-- 計算モード設定 -->
+      <div class="form-group">
+        <label class="form-label">
+          計算モード <span class="required-badge">必須</span>
+        </label>
+        <div class="mode-radio-group">
+        <label class="mode-radio-label" id="modeLabel1">
+          <input type="radio" name="mode" id="modeFeature1" value="feature1">
+          <span class="mode-radio-content">
+            <strong>日給保証</strong>
+            <small>80個以下¥14,000 / 81↑+¥110/個</small>
+          </span>
+        </label>
+        <label class="mode-radio-label" id="modeLabel2">
+          <input type="radio" name="mode" id="modeFeature2" value="feature2">
+          <span class="mode-radio-content">
+            <strong>単価150</strong>
+            <small>税抜¥150 / 税込¥165/個</small>
+          </span>
+        </label>
+        <label class="mode-radio-label" id="modeLabel3">
+          <input type="radio" name="mode" id="modeFeature3" value="feature3">
+          <span class="mode-radio-content">
+            <strong>単価160</strong>
+            <small>税抜¥160 / 税込¥176/個</small>
+          </span>
+        </label>
+      </div>
+      </div>
+
+      <!-- 月固定控除 -->
+      <div class="form-group">
+        <label class="form-label" for="inputDeduction">月額リース（円）</label>
+        <div class="stepper-wrap">
+          <button class="stepper-btn" data-target="inputDeduction" data-delta="-1000" aria-label="1000減らす">−</button>
+          <input type="number" id="inputDeduction" class="form-input stepper-input"
+                 min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*">
+          <button class="stepper-btn" data-target="inputDeduction" data-delta="1000" aria-label="1000増やす">＋</button>
+        </div>
+      </div>
+      <button class="btn-secondary btn-full" id="saveDeduction">リース額を保存</button>
+    </section>
+
+    <section class="section card">
+      <h2 class="section-title">表示モード</h2>
+      <div class="theme-toggle">
+        <button class="btn-secondary" id="themeDark">ダークモード</button>
+        <button class="btn-secondary" id="themeLight">ライトモード</button>
+      </div>
+    </section>
+
+    <!-- データ移行 -->
+    <section class="section card">
+      <h2 class="section-title">データ移行</h2>
+      <p class="section-note">別のURLで使っていたデータを移したいときに使います。</p>
+      <button class="btn-secondary btn-full" id="exportData">データを書き出す</button>
+      <div class="form-group" style="margin-top: 0.75rem;">
+        <label class="form-label" for="importData">データを貼り付け</label>
+        <textarea id="importData" class="form-input" rows="4" placeholder="ここにデータを貼り付け"></textarea>
+      </div>
+      <button class="btn-secondary btn-full" id="importDataBtn">データを読み込む</button>
+    </section>
+  </div><!-- /#viewSettings -->
+
+  <!-- 年間グラフ画面 -->
+  <!-- JSが棒グラフを描画するエリア -->
+  <div class="view view-annual" id="viewAnnual">
+    <section class="section card">
+      <h2 class="section-title">年間グラフ</h2>
+      <div class="form-group">
+        <label class="form-label" for="annualYear">対象年</label>
+        <select id="annualYear" class="form-input"></select>
+      </div>
+      <div id="annualChart" class="annual-chart"></div>
+      <div class="chart-legend">
+        <span class="legend-item"><i class="legend-swatch ex"></i>税抜</span>
+        <span class="legend-item"><i class="legend-swatch inc"></i>税込</span>
+      </div>
+    </section>
+  </div><!-- /#viewAnnual -->
+
+  <!-- データ診断画面 -->
+  <div class="view view-diagnostic" id="viewDiagnostic">
+    <section class="section card">
+      <h2 class="section-title">データ診断</h2>
+      <p class="section-note">現在のURLと、保存されているキーを表示します。</p>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">現在のURL</div>
+        <div class="diagnostic-value" id="diagUrl"></div>
+      </div>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">localStorageのキー</div>
+        <div class="diagnostic-value" id="diagKeys"></div>
+      </div>
+      <div class="diagnostic-block">
+        <div class="diagnostic-label">`delivery-wage-app-v1` の有無</div>
+        <div class="diagnostic-value" id="diagLegacy"></div>
+      </div>
+      <button class="btn-secondary btn-full" id="copyDiag">診断情報をコピー</button>
+    </section>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- 画面下部に固定される保存ボタン -->
+<!-- いつでも保存できるように固定してある -->
+<div class="save-bar hidden" id="saveBar">
+  <button class="btn-primary" id="saveRecord">この日に記録</button>
+</div>
+
+<!-- 年月ピッカーモーダル（年月を直接選ぶ） -->
+<!-- モーダル = 画面の上に重ねて出す小さな画面 -->
+<div id="pickerModal" class="modal is-hidden" role="dialog" aria-modal="true">
+  <!-- 画面の暗い背景（クリックで閉じる） -->
+  <div class="modal-overlay" id="pickerOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title">年月を選択</h3>
+    <div class="picker-row">
+      <select id="pickerYear" class="picker-select" aria-label="年"></select>
+      <select id="pickerMonth" class="picker-select" aria-label="月"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="pickerCancel">キャンセル</button>
+      <button class="btn-primary" id="pickerConfirm">確定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日別詳細モーダル（その日の内訳を見る） -->
+<!-- カレンダーで同じ日を再タップすると開く -->
+<div id="memoModal" class="modal is-hidden" role="dialog" aria-modal="true">
+  <div class="modal-overlay" id="memoOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="memoTitle">詳細</h3>
+    <div id="memoBody"></div>
+    <div class="modal-actions modal-actions--single">
+      <button class="btn-primary" id="memoClose">× 閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 保存確認モーダル -->
+<!-- 保存前に「本当に保存するか」を確認する -->
+<div id="saveConfirmModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
+  <div class="modal-overlay" id="saveConfirmOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="saveConfirmTitle">保存確認</h3>
+    <p class="section-note">以下の内容で保存してよろしいですか？</p>
+    <div id="saveConfirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="saveConfirmCancel">キャンセル</button>
+      <button class="btn-primary" id="saveConfirmOk">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 汎用ポップアップ（メッセージ/確認） -->
+<div id="alertModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
+  <div class="modal-overlay" id="alertOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="alertTitle">お知らせ</h3>
+    <p class="section-note" id="alertMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="alertCancel">キャンセル</button>
+      <button class="btn-primary" id="alertOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- メニュー（ホーム/設定/年間グラフ） -->
+<!-- ハンバーガーを押すと出る一覧 -->
+<div id="menuModal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+  <div class="modal-overlay" id="menuOverlay"></div>
+  <div class="modal-content">
+    <h3 class="modal-title" id="menuTitle">メニュー</h3>
+    <div class="menu-list">
+      <button class="btn-secondary btn-full" id="menuHome">ホーム</button>
+      <button class="btn-secondary btn-full" id="menuSettings">設定</button>
+      <button class="btn-secondary btn-full" id="menuAnnual">年間グラフ</button>
+      <button class="btn-secondary btn-full" id="menuDiagnostic">データ診断</button>
+      <button class="btn-secondary btn-full" id="authSignOut">ログアウト</button>
+    </div>
+  </div>
+</div>
+
+<!--
+  JSファイルを読み込む。
+  画面のHTMLが全部読み込まれてから動かしたいので、bodyの最後で読み込む。
+-->
+  <script src="main.js?v=20260327"></script>
+</body>
+</html>

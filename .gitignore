@@ -1,0 +1,8 @@
+node_modules/
+*.db
+*.db-*
+data/*.db
+data/*.db-*
+user-app/data/*.db
+user-app/data/*.db-*
+.DS_Store
