@@ -1,0 +1,9 @@
+{
+  "name": "wages-admin-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "../node_modules/.bin/tsc",
+    "dev": "../node_modules/.bin/tsc -w"
+  }
+}

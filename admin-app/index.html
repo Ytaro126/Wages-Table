@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <title>YTworks Admin</title>
+  <link rel="stylesheet" href="style.css?v=20260412">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-block">
+        <button class="brand-link" id="brandHome" type="button">YTworks</button>
+        <p class="brand-note">Admin Console</p>
+      </div>
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="users" type="button">ユーザー</button>
+        <button class="nav-item" data-view="history" type="button">ログイン履歴</button>
+        <button class="nav-item" data-view="alerts" type="button">アラート</button>
+        <button class="nav-item" data-view="logout" type="button">ログアウト</button>
+      </nav>
+      <div class="access-card">
+        <span class="access-label">想定アクセス条件</span>
+        <strong>自宅 Wi-Fi + 管理用 MacBook</strong>
+        <small>実装前のモック表示です</small>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-button" id="menuButton" type="button" aria-label="メニューを開く">☰</button>
+          <div>
+            <h1 class="page-title" id="pageTitle">ユーザー</h1>
+            <p class="page-subtitle" id="pageSubtitle">登録ユーザーと当月の状況を確認します。</p>
+          </div>
+        </div>
+        <div class="status-pill">Front Only / TypeScript</div>
+      </header>
+
+      <section class="view active" id="view-users">
+        <div class="users-layout">
+          <section class="card users-card">
+            <div class="card-header">
+              <h2>登録ユーザー</h2>
+              <span class="card-badge" id="userCount">0 users</span>
+            </div>
+            <div class="search-wrap">
+              <input id="userSearch" class="search-input" type="search" placeholder="IDで検索">
+            </div>
+            <div class="user-list" id="userList"></div>
+          </section>
+
+          <section class="detail-column">
+            <section class="card summary-card" id="summaryCard"></section>
+            <section class="card records-card">
+              <div class="card-header">
+                <h2>日別データ</h2>
+                <span class="card-badge">閲覧用モック</span>
+              </div>
+              <div class="table-wrap">
+                <table class="records-table">
+                  <thead>
+                    <tr>
+                      <th>日付</th>
+                      <th>配達</th>
+                      <th>集荷</th>
+                      <th>税抜</th>
+                      <th>税込</th>
+                      <th>状態</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recordTableBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <section class="card">
+          <div class="card-header">
+            <h2>ログイン履歴</h2>
+            <span class="card-badge">31日保持予定</span>
+          </div>
+          <div class="timeline" id="historyList"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-alerts">
+        <section class="card">
+          <div class="card-header">
+            <h2>アラート</h2>
+            <span class="card-badge" id="alertCount">0 alerts</span>
+          </div>
+          <div class="alerts-grid" id="alertList"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-logout">
+        <section class="card logout-card">
+          <h2>ログアウト</h2>
+          <p>管理者画面からログアウトしますか？</p>
+          <div class="logout-actions">
+            <button class="secondary-button" id="cancelLogout" type="button">キャンセル</button>
+            <button class="primary-button" id="confirmLogout" type="button">ログアウト</button>
+          </div>
+          <p class="logout-message" id="logoutMessage"></p>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="main.js?v=20260412"></script>
+</body>
+</html>
